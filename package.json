@@ -1,0 +1,24 @@
+{
+  "name": "changeset_test",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/juanpicado/changeset_test.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/juanpicado/changeset_test/issues"
+  },
+  "devDependencies": {
+    "@changesets/changelog-github": "^0.1.0",
+    "@changesets/cli": "^2.3.0"
+  },
+  "homepage": "https://github.com/juanpicado/changeset_test#readme"
+}
