@@ -1,9 +1,10 @@
 {
   "name": "changeset_test",
-  "version": "2.0.0",
-  "description": "",
-  "main": "index.js",
+  "private": true,
   "scripts": {
+    "build": "preconstruct build",
+    "build:dev": "preconstruct dev",
+    "postinstall": "preconstruct dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -16,9 +17,17 @@
   "bugs": {
     "url": "https://github.com/juanpicado/changeset_test/issues"
   },
+  "preconstruct": {
+    "packages": [
+      "packages/*"
+    ]
+  },
   "devDependencies": {
+    "@babel/cli": "^7.10.5",
+    "@babel/core": "^7.10.5",
     "@changesets/changelog-github": "^0.1.0",
-    "@changesets/cli": "^2.3.0"
+    "@changesets/cli": "^2.3.0",
+    "@preconstruct/cli": "1.1.17"
   },
   "homepage": "https://github.com/juanpicado/changeset_test#readme"
 }
