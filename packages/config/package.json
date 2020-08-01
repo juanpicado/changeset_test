@@ -12,5 +12,8 @@
   "license": "ISC",
   "preconstruct": {
     "source": "src/index.js"
+  },
+  "dependencies": {
+    "@custom/typescript": "1.0.0"
   }
 }
