@@ -2,6 +2,7 @@
   "name": "changeset_test",
   "private": true,
   "scripts": {
+    "changeset": "changeset",
     "build": "preconstruct build",
     "build:dev": "preconstruct dev",
     "postinstall": "preconstruct dev",
