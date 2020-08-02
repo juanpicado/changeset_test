@@ -5,3 +5,7 @@ export function foo() {
 export function sumStuff(a, b) {
 	return a + b;
 }
+
+export function plusStuff(a, b) {
+	return a + b;
+}
