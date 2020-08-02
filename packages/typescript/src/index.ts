@@ -7,3 +7,7 @@ export function typescript() {
 export function doSomething() {
 	return sumStuff(2, 4);
 }
+
+export function doSomethingElse() {
+	return sumStuff(2, 4);
+}
