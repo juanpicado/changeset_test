@@ -1,5 +1,5 @@
 {
-  "name": "utils",
+  "name": "@scope/utils",
   "version": "2.0.0",
   "description": "",
   "main": "dist/utils.cjs.js",

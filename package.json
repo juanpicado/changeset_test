@@ -6,6 +6,7 @@
     "version:changeset": "changeset version",
     "build": "preconstruct build",
     "build:dev": "preconstruct dev",
+    "fix:repo": "manypkg fix",
     "postinstall": "preconstruct dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
@@ -24,14 +25,15 @@
       "packages/*"
     ]
   },
-  "devDependencies": {
+  "homepage": "https://github.com/juanpicado/changeset_test#readme",
+  "dependencies": {
     "@babel/cli": "^7.10.5",
     "@babel/core": "^7.10.5",
     "@babel/preset-typescript": "^7.10.4",
     "@changesets/changelog-github": "^0.1.0",
     "@changesets/cli": "^2.3.0",
+    "@manypkg/cli": "^0.14.0",
     "@preconstruct/cli": "1.1.17",
     "typescript": "^3.9.7"
-  },
-  "homepage": "https://github.com/juanpicado/changeset_test#readme"
+  }
 }
