@@ -26,7 +26,7 @@ jobs:
   version:
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    # if: github.ref == 'refs/heads/next' && github.repository == 'remirror/remirror'
+    if: github.ref == 'refs/heads/master' && github.repository == 'juanpicado/changeset_test'
     steps:
       - name: checkout code repository
         uses: actions/checkout@v2
@@ -64,7 +64,7 @@ jobs:
       - name: create versions
         uses: changesets/action@master
         with:
-          version: pnpm ci:version
+          version: pnpm version:changeset
           commit: 'chore: update versions'
           title: 'chore: update versions'
         env:
