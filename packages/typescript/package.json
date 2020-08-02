@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@scope/utils": "2.0.0"
+    "@scope/utils": "workspace:*"
   },
   "preconstruct": {
     "source": "src/index.ts"

@@ -15,8 +15,8 @@ importers:
       '@babel/cli': ^7.10.5
       '@babel/core': ^7.10.5
       '@babel/preset-typescript': ^7.10.4
-      '@changesets/changelog-github': ^0.1.0
-      '@changesets/cli': ^2.3.0
+      '@changesets/changelog-github': ^0.1.1
+      '@changesets/cli': ^2.9.2
       '@manypkg/cli': ^0.14.0
       '@preconstruct/cli': 1.1.17
       npm-run-all: ^4.1.5
@@ -25,12 +25,12 @@ importers:
     dependencies:
       '@custom/typescript': 'link:../typescript'
     specifiers:
-      '@custom/typescript': 2.0.0
+      '@custom/typescript': 'workspace:*'
   packages/typescript:
     dependencies:
       '@scope/utils': 'link:../utils'
     specifiers:
-      '@scope/utils': 2.0.0
+      '@scope/utils': 'workspace:*'
   packages/utils:
     specifiers: {}
 lockfileVersion: 5.1
