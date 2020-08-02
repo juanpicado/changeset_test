@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "changeset": "changeset",
+    "changeset:check": "changeset status --since-master",
     "ci:version": "run-s ci:version:changeset ci:version:repo ci:version:install",
     "ci:version:changeset": "changeset version",
     "ci:version:repo": "run-s fix:repo update:workspace",
