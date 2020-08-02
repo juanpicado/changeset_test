@@ -8,6 +8,7 @@
     "utils": "1.0.0"
   },
   "changesets": [
-    "twenty-maps-act"
+    "twenty-maps-act",
+    "wild-geckos-approve"
   ]
 }

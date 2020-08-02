@@ -1,0 +1,1647 @@
+"use strict";
+
+function _interopDefault(ex) {
+  return ex && "object" == typeof ex && "default" in ex ? ex.default : ex;
+}
+
+var meow = _interopDefault(require("meow")), path = _interopDefault(require("path")), enquirer = _interopDefault(require("enquirer")), pLimit = _interopDefault(require("p-limit")), DataLoader = _interopDefault(require("dataloader")), chalk = _interopDefault(require("chalk")), globby = _interopDefault(require("globby")), fs = require("fs-extra"), detectIndent = _interopDefault(require("detect-indent")), parseJson = _interopDefault(require("parse-json")), util = _interopDefault(require("util")), equal = _interopDefault(require("fast-deep-equal")), resolveFrom = _interopDefault(require("resolve-from")), resolve = _interopDefault(require("resolve")), parseGlob = _interopDefault(require("parse-glob")), micromatch = _interopDefault(require("micromatch")), packlist = _interopDefault(require("npm-packlist")), rollup = require("rollup"), resolve$1 = _interopDefault(require("@rollup/plugin-node-resolve")), alias = _interopDefault(require("@rollup/plugin-alias")), cjs = _interopDefault(require("@rollup/plugin-commonjs")), replace = _interopDefault(require("@rollup/plugin-replace")), builtInModules = _interopDefault(require("builtin-modules")), fs$1 = require("fs"), normalizePath = _interopDefault(require("normalize-path")), json = _interopDefault(require("@rollup/plugin-json")), babel = require("@babel/core"), pluginutils = require("@rollup/pluginutils"), Worker = _interopDefault(require("jest-worker")), initHasher = _interopDefault(require("xxhash-wasm")), QuickLRU = _interopDefault(require("quick-lru")), codeFrame = require("@babel/code-frame"), ms = _interopDefault(require("ms"));
+
+let limit = pLimit(1), prefix = `🎁 ${chalk.green("?")}`;
+
+function createPromptConfirmLoader(message) {
+  let loader = new DataLoader(pkgs => limit(() => (async () => {
+    if (1 === pkgs.length) {
+      let {confirm: confirm} = await enquirer.prompt([ {
+        type: "confirm",
+        name: "confirm",
+        message: message,
+        prefix: prefix + " " + pkgs[0].name,
+        initial: !0
+      } ]);
+      return [ confirm ];
+    }
+    let {answers: answers} = await enquirer.prompt([ {
+      type: "multiselect",
+      name: "answers",
+      message: message,
+      choices: pkgs.map(pkg => ({
+        name: pkg.name,
+        initial: !0
+      })),
+      prefix: prefix
+    } ]);
+    return pkgs.map(pkg => answers.includes(pkg.name));
+  })()));
+  return pkg => loader.load(pkg);
+}
+
+let doPromptInput = async (message, pkg, defaultAnswer) => {
+  let {input: input} = await enquirer.prompt([ {
+    type: "input",
+    name: "input",
+    message: message,
+    prefix: prefix + " " + pkg.name,
+    initial: defaultAnswer
+  } ]);
+  return input;
+}, promptInput = (message, pkg, defaultAnswer) => limit(() => doPromptInput(message, pkg, defaultAnswer)), EXTENSIONS = [ ".js", ".jsx", ".ts", ".tsx" ], PKG_JSON_CONFIG_FIELD = "preconstruct";
+
+function _defineProperty(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+let itemsByPath = {};
+
+class Item {
+  constructor(filePath, contents) {
+    _defineProperty(this, "_contents", void 0), _defineProperty(this, "_stringifiedSavedJson", void 0), 
+    _defineProperty(this, "path", void 0), _defineProperty(this, "directory", void 0), 
+    _defineProperty(this, "json", void 0), _defineProperty(this, "_config", void 0), 
+    this.json = parseJson(contents, filePath), this._stringifiedSavedJson = JSON.stringify(this.json, null, 2), 
+    this._contents = contents, this.path = filePath, this.directory = path.dirname(filePath), 
+    this._config = this.json[PKG_JSON_CONFIG_FIELD] || {}, void 0 === itemsByPath[this.path] && (itemsByPath[this.path] = new Set), 
+    itemsByPath[this.path].add(this);
+  }
+  updater(json) {
+    this.json = json;
+  }
+  async refresh() {
+    let contents = await fs.readFile(this.path, "utf-8"), json = parseJson(contents, this.path);
+    for (let item of itemsByPath[this.path]) item.updater(json);
+  }
+  async save() {
+    Object.keys(this._config).length ? this.json[PKG_JSON_CONFIG_FIELD] = this._config : delete this.json[PKG_JSON_CONFIG_FIELD];
+    let stringified = JSON.stringify(this.json, null, 2);
+    if (stringified !== this._stringifiedSavedJson) {
+      await fs.writeFile(this.path, JSON.stringify(this.json, null, detectIndent(this._contents).indent || "  ") + "\n"), 
+      this._config = this.json[PKG_JSON_CONFIG_FIELD] || {};
+      for (let item of itemsByPath[this.path]) item.updater(this.json);
+      return this._stringifiedSavedJson = stringified, !0;
+    }
+    return !1;
+  }
+}
+
+function format(args, messageType, scope) {
+  let fullPrefix = "🎁 " + {
+    error: chalk.red("error"),
+    success: chalk.green("success"),
+    info: chalk.cyan("info"),
+    none: ""
+  }[messageType] + (void 0 === scope ? "" : " " + chalk.cyan(scope));
+  return fullPrefix + util.format("", ...args).split("\n").join("\n" + fullPrefix + " ");
+}
+
+function error(message, scope) {
+  console.error(format([ message ], "error", scope));
+}
+
+function success(message, scope) {
+  console.log(format([ message ], "success", scope));
+}
+
+function info(message, scope) {
+  console.log(format([ message ], "info", scope));
+}
+
+function log(message) {
+  console.log(format([ message ], "none"));
+}
+
+function _defineProperty$1(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+class FatalError extends Error {
+  constructor(message, scope) {
+    super(message), _defineProperty$1(this, "scope", void 0), this.scope = scope;
+  }
+}
+
+class BatchError extends Error {
+  constructor(errors) {
+    super(errors.map(x => format([ x.message ], "none", x.scope)).join("\n")), _defineProperty$1(this, "errors", void 0), 
+    this.errors = errors;
+  }
+}
+
+class ScopelessError extends Error {}
+
+class UnexpectedBuildError extends FatalError {
+  constructor(error, pkgName) {
+    super(`${util.format("", error).trim()}`, pkgName);
+  }
+}
+
+class FixableError extends FatalError {}
+
+let errors = {
+  noSource: source => `no source file was provided, please create a file at ${source} or specify a custom source file with the ${PKG_JSON_CONFIG_FIELD} source option`,
+  deniedWriteMainField: "changing the main field is required to build",
+  invalidModuleField: "module field is invalid",
+  invalidMainField: "main field is invalid",
+  invalidUmdMainField: "umd:main field is invalid",
+  invalidBrowserField: "browser field is invalid",
+  umdNameNotSpecified: `the umd:main field is specified but a umdName option is not specified. please add it to the ${PKG_JSON_CONFIG_FIELD} field in your package.json`,
+  noEntrypointPkgJson: "There is a missing package.json for an entrypoint",
+  noEntrypoints: "packages must have at least one entrypoint, this package has no entrypoints"
+}, confirms = {
+  writeMainField: createPromptConfirmLoader("preconstruct is going to change the main field in your package.json, are you okay with that?"),
+  writeModuleField: createPromptConfirmLoader("would you like to generate module builds? this will write to the module field in your package.json"),
+  fixModuleField: createPromptConfirmLoader("would you like to fix the module field?"),
+  fixUmdBuild: createPromptConfirmLoader("would you like to fix the umd field?"),
+  fixBrowserField: createPromptConfirmLoader("would you like to fix the browser build?"),
+  createEntrypointPkgJson: createPromptConfirmLoader("A package.json file does not exist for this entrypoint, would you like to create one automatically?"),
+  createEntrypoint: createPromptConfirmLoader("This glob does not match anything, would you like to create an entrypoint for it?")
+}, inputs = {
+  getUmdName: "what should the name used for UMD bundles be?",
+  getSource: "what should the source file for this entrypoint be?"
+}, infos = {
+  validMainField: "main field is valid",
+  validModuleField: "module field is valid",
+  validUmdMainField: "umd:main field is valid",
+  validEntrypoint: "a valid entry point exists.",
+  validBrowserField: "browser field is valid",
+  validPackageEntrypoints: "package entrypoints are valid"
+}, successes = {
+  validProject: "project is valid!",
+  startedWatching: "started watching!"
+};
+
+function getNameForDist(name) {
+  return name.replace(/.*\//, "");
+}
+
+function getValidStringFieldContentForBuildType(type, pkgName) {
+  let safeName = getNameForDist(pkgName);
+  switch (type) {
+   case "main":
+    return `dist/${safeName}.cjs.js`;
+
+   case "module":
+    return `dist/${safeName}.esm.js`;
+
+   case "umd:main":
+    return `dist/${safeName}.umd.min.js`;
+  }
+  throw new Error(`unknown string build type: ${type}. this is likely a bug in preconstruct.`);
+}
+
+function getValidObjectFieldContentForBuildType(type, pkgName, hasModuleBuild) {
+  let safeName = getNameForDist(pkgName);
+  switch (type) {
+   case "browser":
+    {
+      let obj = {
+        [`./dist/${safeName}.cjs.js`]: `./dist/${safeName}.browser.cjs.js`
+      };
+      return hasModuleBuild && (obj[`./dist/${safeName}.esm.js`] = `./dist/${safeName}.browser.esm.js`), 
+      obj;
+    }
+  }
+  throw new Error(`unknown object build type: ${type}. this is likely a bug in preconstruct.`);
+}
+
+function flowTemplate(hasDefaultExport, relativePath) {
+  const escapedPath = JSON.stringify(relativePath);
+  return `// @flow\nexport * from ${escapedPath};${hasDefaultExport ? `\nexport { default } from ${escapedPath};` : ""}\n`;
+}
+
+function tsTemplate(hasDefaultExport, relativePath) {
+  const escapedPath = JSON.stringify(relativePath);
+  return `export * from ${escapedPath};${hasDefaultExport ? `\nexport { default } from ${escapedPath};` : ""}\n`;
+}
+
+let camelToPkgJsonField = {
+  main: "main",
+  module: "module",
+  umdMain: "umd:main",
+  browser: "browser"
+}, keys = Object.keys;
+
+async function fixPackage(pkg) {
+  if (0 === pkg.entrypoints.length) throw new FatalError(errors.noEntrypoints, pkg.name);
+  let fields = {
+    main: !0,
+    module: pkg.entrypoints.some(x => x.module),
+    umdMain: pkg.entrypoints.some(x => x.umdMain),
+    browser: pkg.entrypoints.some(x => x.browser)
+  };
+  return keys(fields).filter(x => fields[x]).forEach(field => {
+    pkg.setFieldOnEntrypoints(field);
+  }), (await Promise.all(pkg.entrypoints.map(x => x.save()))).some(x => x);
+}
+
+let unsafeRequire = require;
+
+function validatePackage(pkg) {
+  if (0 === pkg.entrypoints.length) throw new FatalError(errors.noEntrypoints, pkg.name);
+  let fields = {
+    module: !!pkg.entrypoints[0].module,
+    umdMain: !!pkg.entrypoints[0].umdMain,
+    browser: !!pkg.entrypoints[0].browser
+  };
+  if (pkg.entrypoints.forEach(entrypoint => {
+    keys(fields).forEach(field => {
+      if (entrypoint[field] && !fields[field]) throw new FixableError(`${pkg.entrypoints[0].name} has a ${camelToPkgJsonField[field]} build but ${entrypoint.name} does not have a ${camelToPkgJsonField[field]} build. Entrypoints in a package must either all have a particular build type or all not have a particular build type.`, pkg.name);
+      if (!entrypoint[field] && fields[field]) throw new FixableError(`${entrypoint.name} has a ${camelToPkgJsonField[field]} build but ${pkg.entrypoints[0].name} does not have a ${camelToPkgJsonField[field]} build. Entrypoints in a package must either all have a particular build type or all not have a particular build type.`, pkg.name);
+    });
+  }), fields.umdMain) {
+    let sortaAllDeps = new Set([ ...pkg.json.peerDependencies ? Object.keys(pkg.json.peerDependencies) : [], ...pkg.json.dependencies ? Object.keys(pkg.json.dependencies) : [] ]);
+    for (let depName in pkg.json.dependencies) {
+      let depPkgJson = unsafeRequire(resolveFrom(pkg.directory, depName + "/package.json"));
+      if (depPkgJson.peerDependencies) for (let pkgName in depPkgJson.peerDependencies) if (!sortaAllDeps.has(pkgName)) throw new FatalError(`the package ${chalk.blue(pkg.name)} depends on ${chalk.blue(depName)} which has a peerDependency on ${chalk.blue(pkgName)} but ${chalk.blue(pkgName)} is not specified in the dependencies or peerDependencies of ${chalk.blue(pkg.name)}. please add ${chalk.blue(pkgName)} to the dependencies or peerDependencies of ${chalk.blue(pkg.name)}`, pkg.name);
+    }
+  }
+}
+
+function validateEntrypointSource(entrypoint) {
+  try {
+    if (!entrypoint.source.startsWith(entrypoint.package.directory)) throw new FatalError(`entrypoint source files must be inside their respective package directory but this entrypoint has specified its source file as ${entrypoint.configSource}`, entrypoint.name);
+  } catch (e) {
+    if ("MODULE_NOT_FOUND" === e.code) throw new FatalError(errors.noSource(entrypoint.configSource), entrypoint.name);
+    throw e;
+  }
+}
+
+const isFieldValid = {
+  main: entrypoint => entrypoint.main === getValidStringFieldContentForBuildType("main", entrypoint.package.name),
+  module: entrypoint => entrypoint.module === getValidStringFieldContentForBuildType("module", entrypoint.package.name),
+  umdMain: entrypoint => entrypoint.umdMain === getValidStringFieldContentForBuildType("umd:main", entrypoint.package.name),
+  browser: entrypoint => equal(entrypoint.browser, getValidObjectFieldContentForBuildType("browser", entrypoint.package.name, null !== entrypoint.module))
+};
+
+function isUmdNameSpecified(entrypoint) {
+  return "string" == typeof entrypoint._config.umdName;
+}
+
+function validateEntrypoint(entrypoint, log) {
+  if (validateEntrypointSource(entrypoint), log && info(infos.validEntrypoint, entrypoint.name), 
+  !isFieldValid.main(entrypoint)) throw new FixableError(errors.invalidMainField, entrypoint.name);
+  if (log && info(infos.validMainField, entrypoint.name), null !== entrypoint.module) {
+    if (!isFieldValid.module(entrypoint)) throw new FixableError(errors.invalidModuleField, entrypoint.name);
+    log && info(infos.validModuleField, entrypoint.name);
+  }
+  if (null !== entrypoint.umdMain) {
+    if (!isFieldValid.umdMain(entrypoint)) throw new FixableError(errors.invalidUmdMainField, entrypoint.name);
+    if (!isUmdNameSpecified(entrypoint)) throw new FixableError(errors.umdNameNotSpecified, entrypoint.name);
+    log && info(infos.validUmdMainField, entrypoint.name);
+  }
+  if (null !== entrypoint.browser) {
+    if ("string" == typeof entrypoint.browser || !isFieldValid.browser(entrypoint)) throw new FixableError(errors.invalidBrowserField, entrypoint.name);
+    log && info(infos.validBrowserField, entrypoint.name);
+  }
+}
+
+async function validate(directory) {
+  let project = await Project.create(directory);
+  for (let pkg of project.packages) {
+    validatePackage(pkg);
+    for (let entrypoint of pkg.entrypoints) validateEntrypoint(entrypoint, !0);
+    info(infos.validPackageEntrypoints, pkg.name);
+  }
+  success(successes.validProject);
+}
+
+function ownKeys(object, enumerableOnly) {
+  var keys = Object.keys(object);
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+    enumerableOnly && (symbols = symbols.filter((function(sym) {
+      return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+    }))), keys.push.apply(keys, symbols);
+  }
+  return keys;
+}
+
+function _objectSpread(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = null != arguments[i] ? arguments[i] : {};
+    i % 2 ? ownKeys(Object(source), !0).forEach((function(key) {
+      _defineProperty$2(target, key, source[key]);
+    })) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys(Object(source)).forEach((function(key) {
+      Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+    }));
+  }
+  return target;
+}
+
+function _defineProperty$2(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+let fields = [ "version", "description", "main", "module", "umd:main", "browser" ];
+
+function setFieldInOrder(obj, field, value) {
+  if (field in obj) return _objectSpread({}, obj, {
+    [field]: value
+  });
+  let fieldIndex = fields.indexOf(field), idealField = fields.slice(0, fieldIndex).reverse().find(key => key in obj);
+  if (void 0 === idealField) return _objectSpread({}, obj, {
+    [field]: value
+  });
+  let newObj = {};
+  for (let key in obj) newObj[key] = obj[key], key === idealField && (newObj[field] = value);
+  return newObj;
+}
+
+class Entrypoint extends Item {
+  constructor(filePath, contents, pkg) {
+    super(filePath, contents), _defineProperty$2(this, "package", void 0), _defineProperty$2(this, "_strict", void 0), 
+    this.package = pkg;
+  }
+  get name() {
+    return path.join(this.package.name, path.relative(this.package.directory, this.directory));
+  }
+  get main() {
+    if (null == this.json.main || "string" == typeof this.json.main) return void 0 === this.json.main ? null : this.json.main;
+    throw new FatalError("This entrypoint has a main field that exists but is not a string", this.name);
+  }
+  set main(path) {
+    this.json = setFieldInOrder(this.json, "main", path);
+  }
+  get module() {
+    if (null == this.json.module || "string" == typeof this.json.module) return void 0 === this.json.module ? null : this.json.module;
+    throw new FatalError("This entrypoint has a module field that exists but is not a string", this.name);
+  }
+  set module(path) {
+    this.json = setFieldInOrder(this.json, "module", path);
+  }
+  get browser() {
+    if (null == this.json.browser || "string" == typeof this.json.browser || "object" == typeof this.json.browser) return void 0 === this.json.browser ? null : this.json.browser;
+    throw new FatalError("This entrypoint has a browser field that exists but it is not a string or an object", this.name);
+  }
+  set browser(option) {
+    this.json = setFieldInOrder(this.json, "browser", option);
+  }
+  get umdMain() {
+    if (null == this.json["umd:main"] || "string" == typeof this.json["umd:main"]) return void 0 === this.json["umd:main"] ? null : this.json["umd:main"];
+    throw new FatalError("This entrypoint has a umd:main field that exists but it is not a string", this.name);
+  }
+  set umdMain(path) {
+    this.json = setFieldInOrder(this.json, "umd:main", path);
+  }
+  get configSource() {
+    if (this.package.project.experimentalFlags.newEntrypoints) {
+      if (void 0 !== this._config.source) throw new FatalError("The source option is not allowed with the newEntrypoints experimental flag", this.name);
+      return path.relative(this.directory, path.join(this.package.directory, "src", path.relative(this.package.directory, this.directory)));
+    }
+    if (null != this._config.source && "string" != typeof this._config.source) throw new FatalError("The source option for this entrypoint is not a string", this.name);
+    return null == this._config.source ? "src/index" : this._config.source;
+  }
+  get source() {
+    return resolve.sync(path.join(this.directory, this.configSource), {
+      extensions: EXTENSIONS
+    });
+  }
+  get umdName() {
+    if (null == this._config.umdName || "string" == typeof this._config.umdName) return void 0 === this._config.umdName ? null : this._config.umdName;
+    throw new FatalError("This entrypoint has a umd:main field that exists but it is not a string", this.name);
+  }
+  set umdName(umdName) {
+    null === umdName ? delete this._config.umdName : this._config.umdName = umdName;
+  }
+  strict() {
+    return this._strict || (validatePackage(this.package), validateEntrypoint(this, !1), 
+    this._strict = new StrictEntrypoint(this.path, this._contents, this.package)), this._strict;
+  }
+}
+
+class StrictEntrypoint extends Entrypoint {
+  get main() {
+    if ("string" == typeof this.json.main) return this.json.main;
+    throw new FatalError("This entrypoint's main field is not a string", this.name);
+  }
+  set main(path) {
+    this.json = setFieldInOrder(this.json, "main", path);
+  }
+  get browser() {
+    if (null == this.json.browser || "object" == typeof this.json.browser) return void 0 === this.json.browser ? null : this.json.browser;
+    throw new FatalError("This entrypoint has a browser field that exists but it is not an object", this.name);
+  }
+  set browser(option) {
+    this.json = setFieldInOrder(this.json, "browser", option);
+  }
+  updater(json) {
+    super.updater(json), validatePackage(this.package), validateEntrypoint(this, !1);
+  }
+  strict() {
+    return this;
+  }
+}
+
+async function getUselessGlobsThatArentReallyGlobs(globs, cwd) {
+  return Promise.all(globs.map(async glob => {
+    if (!parseGlob(glob).is.glob) {
+      if (micromatch([ glob ], globs).length) {
+        let resolvedPath = path.resolve(cwd, glob);
+        try {
+          await fs.readdir(resolvedPath);
+        } catch (err) {
+          if ("ENOENT" !== err.code) throw err;
+          return resolvedPath;
+        }
+      }
+    }
+  }));
+}
+
+function _defineProperty$3(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+class Package extends Item {
+  constructor(...args) {
+    super(...args), _defineProperty$3(this, "project", void 0), _defineProperty$3(this, "entrypoints", void 0);
+  }
+  get configEntrypoints() {
+    if (null == this._config.entrypoints) return this.project.experimentalFlags.newEntrypoints ? [ "index.{js,jsx,ts,tsx}" ] : [ "." ];
+    if (Array.isArray(this._config.entrypoints) && this._config.entrypoints.every(x => "string" == typeof x)) return this._config.entrypoints;
+    throw new FatalError("The entrypoints option for this packages is not an array of globs", this.name);
+  }
+  static async create(directory, project) {
+    let filePath = path.join(directory, "package.json"), contents = await fs.readFile(filePath, "utf-8"), pkg = new Package(filePath, contents);
+    if (pkg.project = project, project.experimentalFlags.newEntrypoints) {
+      let entrypoints = await globby(pkg.configEntrypoints, {
+        cwd: path.join(pkg.directory, "src"),
+        onlyFiles: !0,
+        absolute: !0,
+        expandDirectories: !1
+      });
+      pkg.entrypoints = await Promise.all(entrypoints.map(async sourceFile => {
+        let directory = path.join(pkg.directory, sourceFile.replace(path.join(pkg.directory, "src"), "").replace(/\.[tj]sx?$/, ""));
+        directory.endsWith(path.sep + "index") && (directory = path.dirname(directory));
+        let filename = path.join(directory, "package.json"), contents = null;
+        try {
+          contents = await fs.readFile(filename, "utf-8");
+        } catch (e) {
+          if ("ENOENT" !== e.code) throw e;
+        }
+        return {
+          filename: filename,
+          contents: contents,
+          hasAccepted: !1
+        };
+      })).then(async descriptors => {
+        let getPlainEntrypointContent = () => {
+          let plainEntrypointObj = {
+            main: getValidStringFieldContentForBuildType("main", pkg.name)
+          };
+          for (let descriptor of descriptors) if (null !== descriptor.contents) {
+            let parsed = parseJson(descriptor.contents, descriptor.filename);
+            for (let field of [ "module", "umd:main" ]) void 0 !== parsed[field] && (plainEntrypointObj[field] = getValidStringFieldContentForBuildType(field, pkg.name));
+            void 0 !== parsed.browser && (plainEntrypointObj.browser = getValidObjectFieldContentForBuildType("browser", pkg.name, void 0 !== plainEntrypointObj.module));
+          }
+          let plainEntrypointContents = JSON.stringify(plainEntrypointObj, null, detectIndent(contents).indent || "  ") + "\n";
+          return getPlainEntrypointContent = () => plainEntrypointContents, plainEntrypointContents;
+        };
+        return Promise.all(descriptors.map(async ({filename: filename, contents: contents, hasAccepted: hasAccepted}) => {
+          if (null === contents || hasAccepted) {
+            if (!hasAccepted) {
+              if (!await confirms.createEntrypointPkgJson({
+                name: path.join(pkg.name, path.relative(pkg.directory, directory))
+              })) throw new FatalError(errors.noEntrypointPkgJson, path.join(pkg.name, path.relative(pkg.directory, directory)));
+            }
+            contents = getPlainEntrypointContent(), await fs.outputFile(filename, contents);
+          }
+          return new Entrypoint(filename, contents, pkg);
+        }));
+      });
+    } else {
+      let entrypointDirectories = await globby(pkg.configEntrypoints, {
+        cwd: pkg.directory,
+        onlyDirectories: !0,
+        absolute: !0,
+        expandDirectories: !1
+      });
+      pkg.entrypoints = await Promise.all(entrypointDirectories.map(async directory => {
+        let filename = path.join(directory, "package.json"), contents = null;
+        try {
+          contents = await fs.readFile(filename, "utf-8");
+        } catch (e) {
+          if ("ENOENT" !== e.code) throw e;
+        }
+        return {
+          filename: filename,
+          contents: contents,
+          hasAccepted: !1
+        };
+      })).then(async descriptors => {
+        let getPlainEntrypointContent = () => {
+          let plainEntrypointObj = {
+            main: getValidStringFieldContentForBuildType("main", pkg.name)
+          };
+          for (let descriptor of descriptors) if (null !== descriptor.contents) {
+            let parsed = parseJson(descriptor.contents, descriptor.filename);
+            for (let field of [ "module", "umd:main" ]) void 0 !== parsed[field] && (plainEntrypointObj[field] = getValidStringFieldContentForBuildType(field, pkg.name));
+            void 0 !== parsed.browser && (plainEntrypointObj.browser = getValidObjectFieldContentForBuildType("browser", pkg.name, void 0 !== plainEntrypointObj.module));
+          }
+          let plainEntrypointContents = JSON.stringify(plainEntrypointObj, null, detectIndent(contents).indent || "  ") + "\n";
+          return getPlainEntrypointContent = () => plainEntrypointContents, plainEntrypointContents;
+        }, globErrors = await getUselessGlobsThatArentReallyGlobs(pkg.configEntrypoints, pkg.directory);
+        return globErrors.some(x => void 0 !== x) && (await Promise.all(globErrors.map(async (globError, index) => {
+          if (void 0 !== globError) {
+            await confirms.createEntrypoint({
+              name: path.join(pkg.name, path.relative(pkg.directory, globError))
+            }) ? (descriptors.push({
+              contents: null,
+              filename: path.resolve(pkg.directory, globError, "package.json"),
+              hasAccepted: !0
+            }), await fs.mkdirp(globError)) : delete pkg._config.entrypoints[index];
+          }
+        })), pkg._config.entrypoints = pkg._config.entrypoints.filter(x => x), await pkg.save()), 
+        Promise.all(descriptors.map(async ({filename: filename, contents: contents, hasAccepted: hasAccepted}) => {
+          if (null === contents || hasAccepted) {
+            if (!hasAccepted) {
+              if (!await confirms.createEntrypointPkgJson({
+                name: path.join(pkg.name, path.relative(pkg.directory, directory))
+              })) throw new FatalError(errors.noEntrypointPkgJson, path.join(pkg.name, path.relative(pkg.directory, directory)));
+            }
+            contents = getPlainEntrypointContent(), await fs.writeFile(filename, contents);
+          }
+          return new Entrypoint(filename, contents, pkg);
+        }));
+      });
+    }
+    return pkg;
+  }
+  setFieldOnEntrypoints(field) {
+    this.entrypoints.forEach(entrypoint => {
+      switch (field) {
+       case "main":
+        entrypoint.main = getValidStringFieldContentForBuildType("main", this.name);
+        break;
+
+       case "module":
+        entrypoint.module = getValidStringFieldContentForBuildType("module", this.name);
+        break;
+
+       case "browser":
+        entrypoint.browser = getValidObjectFieldContentForBuildType("browser", this.name, null !== entrypoint.module);
+        break;
+
+       case "umdMain":
+        entrypoint.umdMain = getValidStringFieldContentForBuildType("umd:main", this.name);
+      }
+    });
+  }
+  get name() {
+    if ("string" != typeof this.json.name) throw new FatalError("The name field on this package is not a string", this.directory);
+    return this.json.name;
+  }
+  set name(name) {
+    this.json.name = name;
+  }
+}
+
+async function validateIncludedFiles(pkg) {
+  try {
+    await Promise.all(pkg.entrypoints.map(async entrypoint => {
+      let filename = path.join(entrypoint.directory, "dist", "preconstruct-test-file");
+      return await fs.ensureFile(filename), fs.writeFile(filename, "test content");
+    }));
+    let result = await packlist({
+      path: pkg.directory
+    });
+    result = result.map(p => path.normalize(p));
+    let messages = [];
+    if (pkg.entrypoints.forEach(entrypoint => {
+      let pkgJsonPath = path.relative(pkg.directory, path.resolve(entrypoint.directory, "package.json")), distFilePath = path.relative(pkg.directory, path.resolve(entrypoint.directory, "dist", "preconstruct-test-file")), entrypointName = path.relative(pkg.directory, entrypoint.directory);
+      result.includes(pkgJsonPath) ? result.includes(distFilePath) || messages.push(`the dist directory ${"" === entrypointName ? "" : `for entrypoint ${chalk.cyan(entrypointName)} `}isn't included in the published files for this package, please add it to the files field in the package's package.json`) : messages.push(`the entrypoint ${chalk.cyan(entrypointName)} isn't included in the published files for this package, please add it to the files field in the package's package.json`);
+    }), messages.length) throw new FatalError(messages.join("\n"), pkg.name);
+  } finally {
+    await Promise.all(pkg.entrypoints.map(entrypoint => fs.remove(path.join(entrypoint.directory, "dist", "preconstruct-test-file"))));
+  }
+}
+
+function _defineProperty$4(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+const allSettled = promises => Promise.all(promises.map(promise => promise.then(value => ({
+  status: "fulfilled",
+  value: value
+}), reason => ({
+  status: "rejected",
+  reason: reason
+}))));
+
+class Project extends Item {
+  constructor(...args) {
+    super(...args), _defineProperty$4(this, "packages", void 0);
+  }
+  get experimentalFlags() {
+    let config = this._config.___experimentalFlags_WILL_CHANGE_IN_PATCH || {};
+    return {
+      newEntrypoints: !!config.newEntrypoints,
+      useSourceInsteadOfGeneratingTSDeclarations: !!config.useSourceInsteadOfGeneratingTSDeclarations,
+      useTSMorphToGenerateTSDeclarations: !!config.useTSMorphToGenerateTSDeclarations
+    };
+  }
+  get configPackages() {
+    if (null == this._config.packages) return [ "." ];
+    if (Array.isArray(this._config.packages) && this._config.packages.every(x => "string" == typeof x)) return this._config.packages;
+    throw new FatalError("The packages option for this project is not an array of globs", this.name);
+  }
+  static async create(directory) {
+    let filePath = path.join(directory, "package.json"), contents = await fs.readFile(filePath, "utf-8"), project = new Project(filePath, contents);
+    return project.packages = await project._packages(), project;
+  }
+  get name() {
+    if ("string" != typeof this.json.name) throw new FatalError("The name field on this project is not a string", this.directory);
+    return this.json.name;
+  }
+  set name(name) {
+    this.json.name = name;
+  }
+  async _packages() {
+    if (!this._config.packages && this.json.workspaces) {
+      let workspaces;
+      Array.isArray(this.json.workspaces) ? workspaces = this.json.workspaces : Array.isArray(this.json.workspaces.packages) && (workspaces = this.json.workspaces.packages);
+      let packages = await promptInput("what packages should preconstruct build?", this, workspaces.join(","));
+      this._config.packages = packages.split(","), await this.save();
+    }
+    let filenames = await globby(this.configPackages, {
+      cwd: this.directory,
+      onlyDirectories: !0,
+      absolute: !0,
+      expandDirectories: !1
+    }), packages = [];
+    await Promise.all(filenames.map(async x => {
+      try {
+        packages.push(await Package.create(x, this));
+      } catch (err) {
+        if ("ENOENT" === err.code && err.path === path.join(x, "package.json")) return;
+        throw err;
+      }
+    }));
+    const errored = (await allSettled(packages.map(pkg => validateIncludedFiles(pkg)))).find(result => "rejected" === result.status);
+    if (errored) throw errored.reason;
+    return packages;
+  }
+}
+
+async function doInit(pkg) {
+  if (pkg.entrypoints.forEach(entrypoint => {
+    validateEntrypointSource(entrypoint);
+  }), pkg.entrypoints.every(entrypoint => isFieldValid.main(entrypoint))) info(infos.validMainField, pkg.name); else {
+    if (!await confirms.writeMainField(pkg)) throw new FatalError(errors.deniedWriteMainField, pkg.name);
+    pkg.setFieldOnEntrypoints("main");
+  }
+  let allEntrypointsAreMissingAModuleField = pkg.entrypoints.every(entrypoint => null === entrypoint.module), someEntrypointsAreNotValid = pkg.entrypoints.some(entrypoint => !isFieldValid.module(entrypoint));
+  if (allEntrypointsAreMissingAModuleField || someEntrypointsAreNotValid) {
+    if (await confirms.writeModuleField(pkg)) pkg.setFieldOnEntrypoints("module"); else if (!allEntrypointsAreMissingAModuleField) throw new FixableError(errors.invalidModuleField, pkg.name);
+  } else info(infos.validModuleField, pkg.name);
+  let someEntrypointsHaveAMaybeInvalidUmdBuild = pkg.entrypoints.some(entrypoint => null !== entrypoint.umdMain), someUmdMainFieldsAreInvalid = pkg.entrypoints.some(entrypoint => !isFieldValid.umdMain(entrypoint)), someUmdNamesAreNotSpecified = pkg.entrypoints.some(entrypoint => !isUmdNameSpecified(entrypoint));
+  if (someEntrypointsHaveAMaybeInvalidUmdBuild && (someUmdMainFieldsAreInvalid || someUmdNamesAreNotSpecified)) {
+    if (!await confirms.fixUmdBuild(pkg)) throw new FixableError(errors.invalidUmdMainField, pkg.name);
+    pkg.setFieldOnEntrypoints("umdMain");
+    for (let entrypoint of pkg.entrypoints) {
+      let umdName = await promptInput(inputs.getUmdName, entrypoint);
+      entrypoint.umdName = umdName;
+    }
+  }
+  let someEntrypointsHaveABrowserField = pkg.entrypoints.some(entrypoint => null !== entrypoint.browser), someEntrypointsHaveAnInvalidBrowserField = pkg.entrypoints.some(entrypoint => !isFieldValid.browser(entrypoint));
+  if (someEntrypointsHaveABrowserField && someEntrypointsHaveAnInvalidBrowserField) {
+    if (!await confirms.fixBrowserField(pkg)) throw new FixableError(errors.invalidBrowserField, pkg.name);
+    pkg.setFieldOnEntrypoints("browser");
+  }
+  await Promise.all(pkg.entrypoints.map(x => x.save()));
+}
+
+async function init(directory) {
+  let project = await Project.create(directory);
+  await Promise.all(project.packages.map(doInit)), success("initialised project!");
+}
+
+function getAliases(project) {
+  let aliases = {};
+  return project.packages.forEach(pkg => {
+    pkg.entrypoints.map(x => x.strict()).forEach(entrypoint => {
+      aliases[entrypoint.name] = path.join(pkg.name, path.relative(entrypoint.directory, entrypoint.source));
+    });
+  }), aliases;
+}
+
+const pattern = /from (["'])@babel\/runtime\/helpers\/(\w+)["']/g;
+
+function rewriteBabelRuntimeHelpers() {
+  return {
+    name: "rewrite-babel-runtime-helpers",
+    renderChunk: (code, chunkInfo, {format: format}) => "esm" !== format && "es" !== format ? null : code.replace(pattern, (_, quote, path) => `from ${quote}@babel/runtime/helpers/esm/${path}${quote}`)
+  };
+}
+
+function getDevPath(cjsPath) {
+  return cjsPath.replace(/\.js$/, ".dev.js");
+}
+
+function getProdPath(cjsPath) {
+  return cjsPath.replace(/\.js$/, ".prod.js");
+}
+
+function flowAndNodeDevProdEntry(pkg, warnings) {
+  return {
+    name: "flow-and-prod-dev-entry",
+    load: id => "could-not-resolve" === id ? "" : null,
+    async resolveId(source, importer) {
+      let resolved = await this.resolve(source, importer, {
+        skipSelf: !0
+      });
+      if (null === resolved) {
+        if (!source.startsWith(".")) return warnings.push(new FatalError(`"${source}" is imported by "${path.relative(pkg.directory, importer)}" but the package is not specified in dependencies or peerDependencies`, pkg.name)), 
+        "could-not-resolve";
+        throw new FatalError(`Could not resolve ${source} from ${path.relative(pkg.directory, importer)}`, pkg.name);
+      }
+      return resolved.id.startsWith("\0") || resolved.id.startsWith(pkg.directory) ? resolved : (warnings.push(new FatalError(`all relative imports in a package should only import modules inside of their package directory but "${path.relative(pkg.directory, importer)}" is importing "${source}"`, pkg.name)), 
+      "could-not-resolve");
+    },
+    async generateBundle(opts, bundle, something) {
+      for (const n in bundle) {
+        const file = bundle[n];
+        if ("asset" === file.type || "chunk" !== file.type || !file.isEntry || null == file.facadeModuleId) continue;
+        let mainFieldPath = file.fileName.replace(/\.prod\.js$/, ".js"), relativeToSource = path.relative(path.dirname(path.join(opts.dir, file.fileName)), file.facadeModuleId);
+        if (!/\.tsx?$/.test(file.facadeModuleId)) {
+          let flowMode = !1;
+          if ((await fs.readFile(file.facadeModuleId, "utf8")).includes("@flow") && (flowMode = file.exports.includes("default") ? "all" : "named"), 
+          !1 !== flowMode) {
+            let flowFileSource = flowTemplate("all" === flowMode, relativeToSource), flowFileName = mainFieldPath + ".flow";
+            this.emitFile({
+              type: "asset",
+              fileName: flowFileName,
+              source: flowFileSource
+            });
+          }
+        }
+        let mainEntrySource = `'use strict';\n\nif (process.env.NODE_ENV === "production") {\n  module.exports = require("./${path.basename(getProdPath(mainFieldPath))}");\n} else {\n  module.exports = require("./${path.basename(getDevPath(mainFieldPath))}");\n}\n`;
+        this.emitFile({
+          type: "asset",
+          fileName: mainFieldPath,
+          source: mainEntrySource
+        });
+      }
+    }
+  };
+}
+
+function _defineProperty$5(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+function normalize(fileName) {
+  return fileName.split("\\").join("/");
+}
+
+let createLanguageServiceHostClass = typescript => {
+  return class {
+    constructor(parsedConfig, transformers) {
+      _defineProperty$5(this, "parsedConfig", void 0), _defineProperty$5(this, "transformers", void 0), 
+      _defineProperty$5(this, "cwd", void 0), _defineProperty$5(this, "snapshots", void 0), 
+      _defineProperty$5(this, "versions", void 0), _defineProperty$5(this, "fileNames", void 0), 
+      _defineProperty$5(this, "service", void 0), this.parsedConfig = parsedConfig, this.transformers = transformers, 
+      this.cwd = process.cwd(), this.snapshots = {}, this.versions = {}, this.fileNames = new Set(parsedConfig.fileNames);
+    }
+    reset() {
+      this.snapshots = {}, this.versions = {};
+    }
+    setLanguageService(service) {
+      this.service = service;
+    }
+    getProjectVersion() {
+      return "1";
+    }
+    setSnapshot(fileName, data) {
+      fileName = normalize(fileName);
+      const snapshot = typescript.ScriptSnapshot.fromString(data);
+      return this.snapshots[fileName] = snapshot, this.versions[fileName] = (this.versions[fileName] || 0) + 1, 
+      this.fileNames.add(fileName), snapshot;
+    }
+    getScriptSnapshot(fileName) {
+      return fileName = normalize(fileName), this.snapshots[fileName] ? this.snapshots[fileName] : fs$1.existsSync(fileName) ? (this.snapshots[fileName] = typescript.ScriptSnapshot.fromString(typescript.sys.readFile(fileName)), 
+      this.versions[fileName] = (this.versions[fileName] || 0) + 1, this.snapshots[fileName]) : void 0;
+    }
+    getCurrentDirectory() {
+      return this.cwd;
+    }
+    getScriptVersion(fileName) {
+      return fileName = normalize(fileName), (this.versions[fileName] || 0).toString();
+    }
+    getScriptFileNames() {
+      return Array.from(this.fileNames.values());
+    }
+    getCompilationSettings() {
+      return this.parsedConfig.options;
+    }
+    getDefaultLibFileName(opts) {
+      return typescript.getDefaultLibFilePath(opts);
+    }
+    useCaseSensitiveFileNames() {
+      return typescript.sys.useCaseSensitiveFileNames;
+    }
+    readDirectory(path, extensions, exclude, include) {
+      return typescript.sys.readDirectory(path, extensions, exclude, include);
+    }
+    readFile(path, encoding) {
+      return typescript.sys.readFile(path, encoding);
+    }
+    fileExists(path) {
+      return typescript.sys.fileExists(path);
+    }
+    getTypeRootsVersion() {
+      return 0;
+    }
+    directoryExists(directoryName) {
+      return typescript.sys.directoryExists(directoryName);
+    }
+    getDirectories(directoryName) {
+      return typescript.sys.getDirectories(directoryName);
+    }
+    getCustomTransformers() {}
+  };
+}, unsafeRequire$1 = require, weakMemoize = function(func) {
+  let cache = new WeakMap;
+  return arg => {
+    if (cache.has(arg)) return cache.get(arg);
+    let ret = func(arg);
+    return cache.set(arg, ret), ret;
+  };
+};
+
+function memoize(fn) {
+  const cache = {};
+  return arg => (void 0 === cache[arg] && (cache[arg] = fn(arg)), cache[arg]);
+}
+
+let getService = weakMemoize(typescript => memoize(async configFileName => {
+  let configFileContents = await fs.readFile(configFileName, "utf8");
+  const result = typescript.parseConfigFileTextToJson(configFileName, configFileContents);
+  let thing = typescript.parseJsonConfigFileContent(result, typescript.sys, process.cwd(), void 0, configFileName);
+  thing.options.declaration = !0, thing.options.noEmit = !1;
+  let servicesHost = new (createLanguageServiceHostClass(typescript))(thing, []), service = typescript.createLanguageService(servicesHost, typescript.createDocumentRegistry());
+  return servicesHost.setLanguageService(service), {
+    service: service,
+    options: thing.options
+  };
+}));
+
+async function createDeclarationCreator(dirname, pkgName) {
+  let typescript;
+  try {
+    typescript = unsafeRequire$1(resolveFrom(dirname, "typescript"));
+  } catch (err) {
+    if ("MODULE_NOT_FOUND" === err.code) throw new FatalError("an entrypoint source file ends with the .ts or .tsx extension but the typescript module could not be resolved from the project directory, please install it.", pkgName);
+    throw err;
+  }
+  let configFileName = typescript.findConfigFile(dirname, typescript.sys.fileExists);
+  if (!configFileName) throw new FatalError("an entrypoint source file ends with the .ts or tsx extension but no TypeScript config exists, please create one.", pkgName);
+  let {service: service, options: options} = await getService(typescript)(configFileName), moduleResolutionCache = typescript.createModuleResolutionCache(dirname, x => x, options);
+  return {
+    getDeps: entrypoints => {
+      let program = service.getProgram();
+      if (!program) throw new Error("This is an internal error, please open an issue if you see this: program not found");
+      let resolvedEntrypointPaths = entrypoints.map(x => {
+        let {resolvedModule: resolvedModule} = typescript.resolveModuleName(path.join(path.dirname(x), path.basename(x, path.extname(x))), dirname, options, typescript.sys, moduleResolutionCache);
+        if (!resolvedModule) throw new Error("This is an internal error, please open an issue if you see this: ts could not resolve module");
+        return resolvedModule.resolvedFileName;
+      }), allDeps = new Set(resolvedEntrypointPaths);
+      return function searchDeps(deps) {
+        for (let dep of deps) {
+          let sourceFile = program.getSourceFile(dep);
+          if (!sourceFile) throw new FatalError(`Could not generate type declarations because ${dep} does not exist or is not a TypeScript file`, pkgName);
+          let internalDeps = new Set;
+          for (let {text: text} of sourceFile.imports) {
+            let {resolvedModule: resolvedModule} = typescript.resolveModuleName(text, dep, options, typescript.sys, moduleResolutionCache);
+            resolvedModule && (allDeps.has(resolvedModule.resolvedFileName) || resolvedModule.isExternalLibraryImport || !resolvedModule.resolvedFileName.includes(dirname) || (internalDeps.add(resolvedModule.resolvedFileName), 
+            allDeps.add(resolvedModule.resolvedFileName)));
+          }
+          searchDeps(internalDeps);
+        }
+      }(new Set(resolvedEntrypointPaths)), allDeps;
+    },
+    getDeclarationFile: async filename => {
+      if (filename.endsWith(".d.ts")) return {
+        name: filename.replace(dirname, path.join(dirname, "dist", "declarations")),
+        content: await fs.readFile(filename, "utf8")
+      };
+      let output = service.getEmitOutput(filename, !0, !0);
+      return {
+        name: output.outputFiles[0].name.replace(dirname, path.join(dirname, "dist", "declarations")),
+        content: output.outputFiles[0].text
+      };
+    }
+  };
+}
+
+let weakMemoize$1 = function(func) {
+  let cache = new WeakMap;
+  return arg => {
+    if (cache.has(arg)) return cache.get(arg);
+    let ret = func(arg);
+    return cache.set(arg, ret), ret;
+  };
+};
+
+function memoize$1(fn) {
+  const cache = {};
+  return arg => (void 0 === cache[arg] && (cache[arg] = fn(arg)), cache[arg]);
+}
+
+let getProject = weakMemoize$1(tsm => memoize$1(configFileName => new tsm.Project({
+  tsConfigFilePath: configFileName,
+  compilerOptions: {
+    noEmit: !1,
+    declaration: !0
+  }
+})));
+
+async function createDeclarationCreatorWithTSMorph(dirname, pkgName) {
+  let tsm;
+  try {
+    tsm = require(resolveFrom(dirname, "ts-morph"));
+  } catch (err) {
+    if ("MODULE_NOT_FOUND" === err.code) throw new FatalError("an entrypoint source file ends with the .ts or .tsx extension and the experimental `useTSMorphToGenerateTSDeclarations` flag is on but the ts-morph module could not be resolved from the project directory, please install it.", pkgName);
+    throw err;
+  }
+  let filesToBuild = new Set, queue = [];
+  for (;queue.length; ) {
+    let sourceFile = queue.shift();
+    if (!filesToBuild.has(sourceFile)) {
+      for (const dependency of sourceFile.getReferencedSourceFiles()) dependency.getFilePath();
+      filesToBuild.add(sourceFile);
+    }
+  }
+  let configFileName = tsm.ts.findConfigFile(dirname, tsm.ts.sys.fileExists);
+  if (!configFileName) throw new FatalError("an entrypoint source file ends with the .ts or .tsx extension but no TypeScript config exists, please create one.", pkgName);
+  let project = getProject(tsm)(configFileName);
+  return {
+    getDeps: entrypoints => {
+      let allDeps = new Set, queue = [ ...entrypoints ];
+      for (;queue.length; ) {
+        let sourceFilePath = queue.shift();
+        if (allDeps.has(sourceFilePath)) continue;
+        let sourceFile = project.getSourceFileOrThrow(sourceFilePath);
+        allDeps.add(sourceFilePath);
+        let sourceFiles = sourceFile.getReferencedSourceFiles();
+        queue.push(...sourceFiles.map(x => x.getFilePath()).filter(filepath => filepath.includes(dirname) && !dirname.includes("node_modules")));
+      }
+      return allDeps;
+    },
+    getDeclarationFile: async filename => {
+      if (filename.endsWith(".d.ts")) return {
+        name: filename.replace(dirname, path.join(dirname, "dist", "declarations")),
+        content: await fs.readFile(filename, "utf8")
+      };
+      let outputFiles = project.getSourceFileOrThrow(filename).getEmitOutput({
+        emitOnlyDtsFiles: !0
+      }).getOutputFiles();
+      return {
+        name: outputFiles[0].getFilePath().replace(dirname, path.join(dirname, "dist", "declarations")),
+        content: outputFiles[0].getText()
+      };
+    }
+  };
+}
+
+let isTsPath = source => /\.tsx?/.test(source);
+
+function typescriptDeclarations(pkg) {
+  return !pkg.entrypoints.some(({source: source}) => isTsPath(source)) || pkg.project.experimentalFlags.useSourceInsteadOfGeneratingTSDeclarations ? {
+    name: "typescript-declarations"
+  } : {
+    name: "typescript-declarations",
+    async generateBundle(opts, bundle, something) {
+      let creator = await (pkg.project.experimentalFlags.useTSMorphToGenerateTSDeclarations ? createDeclarationCreatorWithTSMorph : createDeclarationCreator)(pkg.directory, pkg.name), srcFilenameToDtsFilenameMap = new Map, deps = creator.getDeps(pkg.entrypoints.map(x => x.source));
+      await Promise.all([ ...deps ].map(async dep => {
+        let {name: name, content: content} = await creator.getDeclarationFile(dep);
+        srcFilenameToDtsFilenameMap.set(normalizePath(dep), name), this.emitFile({
+          type: "asset",
+          fileName: path.relative(opts.dir, name),
+          source: content
+        });
+      }));
+      for (const n in bundle) {
+        const _file = bundle[n], facadeModuleId = _file.facadeModuleId;
+        if (_file.isAsset || !_file.isEntry || null == facadeModuleId) continue;
+        let file = _file, dtsFilename = srcFilenameToDtsFilenameMap.get(normalizePath(facadeModuleId));
+        if (!dtsFilename) throw new FatalError(`no .d.ts file was found for the entrypoint at ${facadeModuleId}`, pkg.name);
+        let mainFieldPath = file.fileName.replace(/\.prod\.js$/, ""), relativeToSource = path.relative(path.dirname(path.join(opts.dir, file.fileName)), dtsFilename.replace(/\.d\.ts$/, ""));
+        relativeToSource.startsWith(".") || (relativeToSource = `./${relativeToSource}`);
+        let tsFileSource = tsTemplate(file.exports.includes("default"), relativeToSource), tsFileName = mainFieldPath + ".d.ts";
+        this.emitFile({
+          type: "asset",
+          fileName: tsFileName,
+          source: tsFileSource
+        });
+      }
+    }
+  };
+}
+
+let worker, shouldUseWorker = "true" !== process.env.DISABLE_PRECONSTRUCT_WORKER, unsafeRequire$2 = require;
+
+function createWorker() {
+  worker = shouldUseWorker ? new Worker(require.resolve("@preconstruct/cli/worker")) : unsafeRequire$2("@preconstruct/cli/worker");
+}
+
+function destroyWorker() {
+  void 0 !== worker && shouldUseWorker && (worker.end(), worker = void 0);
+}
+
+function getWorker() {
+  if (void 0 === worker) throw new Error("worker not defined");
+  return worker;
+}
+
+function ownKeys$1(object, enumerableOnly) {
+  var keys = Object.keys(object);
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+    enumerableOnly && (symbols = symbols.filter((function(sym) {
+      return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+    }))), keys.push.apply(keys, symbols);
+  }
+  return keys;
+}
+
+function _objectSpread$1(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = null != arguments[i] ? arguments[i] : {};
+    i % 2 ? ownKeys$1(Object(source), !0).forEach((function(key) {
+      _defineProperty$6(target, key, source[key]);
+    })) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$1(Object(source)).forEach((function(key) {
+      Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+    }));
+  }
+  return target;
+}
+
+function _defineProperty$6(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+function _objectWithoutProperties(source, excluded) {
+  if (null == source) return {};
+  var key, i, target = _objectWithoutPropertiesLoose(source, excluded);
+  if (Object.getOwnPropertySymbols) {
+    var sourceSymbolKeys = Object.getOwnPropertySymbols(source);
+    for (i = 0; i < sourceSymbolKeys.length; i++) key = sourceSymbolKeys[i], excluded.indexOf(key) >= 0 || Object.prototype.propertyIsEnumerable.call(source, key) && (target[key] = source[key]);
+  }
+  return target;
+}
+
+function _objectWithoutPropertiesLoose(source, excluded) {
+  if (null == source) return {};
+  var key, i, target = {}, sourceKeys = Object.keys(source);
+  for (i = 0; i < sourceKeys.length; i++) key = sourceKeys[i], excluded.indexOf(key) >= 0 || (target[key] = source[key]);
+  return target;
+}
+
+const regExpCharactersRegExp = /[\\^$.*+?()[\]{}|]/g, escapeRegExpCharacters = str => str.replace(regExpCharactersRegExp, "\\$&"), unpackOptions = (_ref = {}) => {
+  let {extensions: extensions = babel.DEFAULT_EXTENSIONS, sourcemap: sourcemap = !0, sourcemaps: sourcemaps = !0, sourceMap: sourceMap = !0, sourceMaps: sourceMaps = !0} = _ref, rest = _objectWithoutProperties(_ref, [ "extensions", "sourcemap", "sourcemaps", "sourceMap", "sourceMaps" ]);
+  return _objectSpread$1({
+    extensions: extensions,
+    plugins: [],
+    sourceMaps: sourcemap && sourcemaps && sourceMap && sourceMaps
+  }, rest, {
+    caller: _objectSpread$1({
+      name: "rollup-plugin-babel",
+      supportsStaticESM: !0,
+      supportsDynamicImport: !0
+    }, rest.caller)
+  });
+}, lru = new QuickLRU({
+  maxSize: 1e3
+});
+
+let hasher, hasherPromise = initHasher().then(({h64: h64}) => {
+  hasher = h64;
+}), rollupPluginBabel = pluginOptions => {
+  const _unpackOptions = unpackOptions(pluginOptions), {exclude: exclude, extensions: extensions, include: include} = _unpackOptions, babelOptions = _objectWithoutProperties(_unpackOptions, [ "exclude", "extensions", "include" ]), extensionRegExp = new RegExp(`(${extensions.map(escapeRegExpCharacters).join("|")})$`), includeExcludeFilter = pluginutils.createFilter(include, exclude);
+  return {
+    name: "babel",
+    transform(code, filename) {
+      if (!(id => extensionRegExp.test(id) && includeExcludeFilter(id))(filename)) return Promise.resolve(null);
+      let hash = hasher(filename);
+      if (lru.has(hash)) {
+        let cachedResult = lru.get(hash);
+        if (code === cachedResult.code) return cachedResult.promise;
+      }
+      let options = JSON.stringify(_objectSpread$1({}, babelOptions, {
+        filename: filename
+      })), promise = getWorker().transformBabel(code, options);
+      return lru.set(hash, {
+        code: code,
+        promise: promise
+      }), promise;
+    }
+  };
+};
+
+function ownKeys$2(object, enumerableOnly) {
+  var keys = Object.keys(object);
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+    enumerableOnly && (symbols = symbols.filter((function(sym) {
+      return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+    }))), keys.push.apply(keys, symbols);
+  }
+  return keys;
+}
+
+function _objectSpread$2(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = null != arguments[i] ? arguments[i] : {};
+    i % 2 ? ownKeys$2(Object(source), !0).forEach((function(key) {
+      _defineProperty$7(target, key, source[key]);
+    })) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$2(Object(source)).forEach((function(key) {
+      Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+    }));
+  }
+  return target;
+}
+
+function _defineProperty$7(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+function terser(userOptions = {}) {
+  if (null != userOptions.sourceMap) throw Error("sourceMap option is removed, use sourcemap instead");
+  return {
+    name: "terser",
+    renderChunk(code, chunk, outputOptions) {
+      const normalizedOptions = _objectSpread$2({}, userOptions, {
+        sourceMap: !1 !== userOptions.sourcemap,
+        module: "es" === outputOptions.format || "esm" === outputOptions.format
+      });
+      return normalizedOptions.hasOwnProperty("sourcemap") && delete normalizedOptions.sourcemap, 
+      getWorker().transformTerser(code, JSON.stringify(normalizedOptions)).catch(error => {
+        const {message: message, line: line, col: column} = error;
+        throw console.error(codeFrame.codeFrameColumns(code, {
+          start: {
+            line: line,
+            column: column
+          }
+        }, {
+          message: message
+        })), error;
+      });
+    }
+  };
+}
+
+const makeExternalPredicate = externalArr => {
+  if (0 === externalArr.length) return () => !1;
+  const pattern = new RegExp(`^(${externalArr.join("|")})($|/)`);
+  return id => pattern.test(id);
+};
+
+let getRollupConfig = (pkg, entrypoints, aliases, type) => {
+  let external = [];
+  pkg.json.peerDependencies && external.push(...Object.keys(pkg.json.peerDependencies)), 
+  pkg.json.dependencies && "umd" !== type && external.push(...Object.keys(pkg.json.dependencies)), 
+  "node-dev" !== type && "node-prod" !== type || external.push(...builtInModules);
+  let rollupAliases = {};
+  Object.keys(aliases).forEach(key => {
+    try {
+      rollupAliases[key] = resolveFrom(pkg.directory, aliases[key]);
+    } catch (err) {
+      if ("MODULE_NOT_FOUND" !== err.code) throw err;
+    }
+  });
+  let input = {};
+  entrypoints.forEach(entrypoint => {
+    input[path.relative(pkg.directory, path.join(entrypoint.directory, "dist", getNameForDist(pkg.name)))] = entrypoint.source;
+  });
+  let warnings = [];
+  return {
+    input: input,
+    external: makeExternalPredicate(external),
+    onwarn: warning => {
+      if ("string" != typeof warning) switch (warning.code) {
+       case "EMPTY_BUNDLE":
+       case "EVAL":
+       case "CIRCULAR_DEPENDENCY":
+       case "UNUSED_EXTERNAL_IMPORT":
+        break;
+
+       case "UNRESOLVED_IMPORT":
+        if (!warning.source.startsWith(".")) return void warnings.push(new FatalError(`"${warning.source}" is imported by "${path.relative(pkg.directory, warning.importer)}" but the package is not specified in dependencies or peerDependencies`, pkg.name));
+
+       default:
+        warnings.push(new FatalError(`An unhandled Rollup error occurred: ${chalk.red(warning.toString())}`, pkg.name));
+      } else warnings.push(new FatalError(`An unhandled Rollup error occurred: ${chalk.red(warning.toString())}`, pkg.name));
+    },
+    plugins: [ {
+      name: "throw-warnings",
+      buildEnd() {
+        if (warnings.length) throw new BatchError(warnings);
+      }
+    }, "node-prod" === type && flowAndNodeDevProdEntry(pkg, warnings), "node-prod" === type && typescriptDeclarations(pkg), rollupPluginBabel({
+      cwd: pkg.project.directory,
+      extensions: EXTENSIONS
+    }), "umd" === type && cjs({
+      include: [ "**/node_modules/**", "node_modules/**" ]
+    }), ("browser" === type || "umd" === type) && replace({
+      "typeof document": JSON.stringify("object"),
+      "typeof window": JSON.stringify("object")
+    }), rewriteBabelRuntimeHelpers(), json({
+      namedExports: !1
+    }), "umd" === type && alias({
+      entries: rollupAliases
+    }), resolve$1({
+      extensions: EXTENSIONS,
+      customResolveOptions: {
+        moduleDirectory: "umd" === type ? "node_modules" : []
+      }
+    }), ("umd" === type || "node-prod" === type) && replace({
+      "process.env.NODE_ENV": '"production"'
+    }), "umd" === type && terser(), "node-prod" === type && terser({
+      mangle: !1,
+      output: {
+        beautify: !0,
+        indent_level: 2
+      }
+    }) ].filter(x => !!x)
+  };
+};
+
+function getGlobal(project, name) {
+  if (void 0 !== project._config.globals && project._config.globals[name]) return project._config.globals[name];
+  try {
+    let pkgJson = require(resolveFrom(project.directory, path.join(name, "package.json")));
+    if (pkgJson && pkgJson[PKG_JSON_CONFIG_FIELD] && pkgJson[PKG_JSON_CONFIG_FIELD].umdName) return pkgJson[PKG_JSON_CONFIG_FIELD].umdName;
+  } catch (err) {
+    if ("MODULE_NOT_FOUND" !== err.code) throw err;
+  }
+  throw limit(() => (async () => {
+    if (void 0 !== project._config.globals && project._config.globals[name]) return;
+    let response = await doPromptInput(`What should the umdName of ${name} be?`, project);
+    project._config.globals || (project._config.globals = {}), project._config.globals[name] = response, 
+    await project.save();
+  })());
+}
+
+function getRollupConfigs(pkg, aliases) {
+  let configs = [], strictEntrypoints = pkg.entrypoints.map(x => x.strict()), hasModuleField = null !== strictEntrypoints[0].module;
+  return configs.push({
+    config: getRollupConfig(pkg, strictEntrypoints, aliases, "node-dev"),
+    outputs: [ {
+      format: "cjs",
+      entryFileNames: "[name].cjs.dev.js",
+      chunkFileNames: "dist/[name]-[hash].cjs.dev.js",
+      dir: pkg.directory,
+      exports: "named"
+    }, ...hasModuleField ? [ {
+      format: "es",
+      entryFileNames: "[name].esm.js",
+      chunkFileNames: "dist/[name]-[hash].esm.js",
+      dir: pkg.directory
+    } ] : [] ]
+  }), configs.push({
+    config: getRollupConfig(pkg, strictEntrypoints, aliases, "node-prod"),
+    outputs: [ {
+      format: "cjs",
+      entryFileNames: "[name].cjs.prod.js",
+      chunkFileNames: "dist/[name]-[hash].cjs.prod.js",
+      dir: pkg.directory,
+      exports: "named"
+    } ]
+  }), null !== strictEntrypoints[0].umdMain && pkg.entrypoints.map(x => x.strict()).forEach(entrypoint => {
+    configs.push({
+      config: getRollupConfig(pkg, [ entrypoint ], aliases, "umd"),
+      outputs: [ {
+        format: "umd",
+        sourcemap: !0,
+        entryFileNames: "[name].umd.min.js",
+        name: entrypoint.umdName,
+        dir: pkg.directory,
+        globals: name => name === entrypoint.umdName ? name : getGlobal(pkg.project, name)
+      } ]
+    });
+  }), null !== strictEntrypoints[0].browser && configs.push({
+    config: getRollupConfig(pkg, strictEntrypoints, aliases, "browser"),
+    outputs: [ {
+      format: "cjs",
+      entryFileNames: "[name].browser.cjs.js",
+      chunkFileNames: "dist/[name]-[hash].browser.cjs.js",
+      dir: pkg.directory,
+      exports: "named"
+    }, ...hasModuleField ? [ {
+      format: "es",
+      entryFileNames: "[name].browser.esm.js",
+      chunkFileNames: "dist/[name]-[hash].browser.esm.js",
+      dir: pkg.directory
+    } ] : [] ]
+  }), configs;
+}
+
+let tsExtensionPattern = /tsx?$/;
+
+function cjsOnlyReexportTemplate(pathToSource) {
+  return `// 👋 hey!!\n// you might be reading this and seeing .esm in the filename\n// and being confused why there is commonjs below this filename\n// DON'T WORRY!\n// this is intentional\n// it's only commonjs with \`preconstruct dev\`\n// when you run \`preconstruct build\`, it will be ESM\n// why is it commonjs?\n// we need to re-export every export from the source file\n// but we can't do that with ESM without knowing what the exports are (because default exports aren't included in export/import *)\n// and they could change after running \`preconstruct dev\` so we can't look at the file without forcing people to\n// run preconstruct dev again which wouldn't be ideal\n// this solution could change but for now, it's working\n\nmodule.exports = require(${JSON.stringify(pathToSource)})\n`;
+}
+
+async function getTypeSystem(entrypoint) {
+  let content = await fs.readFile(entrypoint.source, "utf8");
+  return tsExtensionPattern.test(entrypoint.source) ? [ "typescript", content ] : content.includes("@flow") ? [ "flow", content ] : [ null, content ];
+}
+
+async function writeDevTSFile(entrypoint, entrypointSourceContent) {
+  let ast = await babel.parseAsync(entrypointSourceContent, {
+    filename: entrypoint.source,
+    sourceType: "module",
+    cwd: entrypoint.package.project.directory
+  }), hasDefaultExport = !1;
+  for (let statement of ast.program.body) if ("ExportDefaultDeclaration" === statement.type || "ExportNamedDeclaration" === statement.type && statement.specifiers.some(specifier => "ExportSpecifier" === specifier.type && "default" === specifier.exported.name)) {
+    hasDefaultExport = !0;
+    break;
+  }
+  let cjsDistPath = path.join(entrypoint.directory, entrypoint.main).replace(/\.js$/, "");
+  await fs.outputFile(cjsDistPath + ".d.ts", "// are you seeing an error that a default export doesn't exist but your source file has a default export?\n// you should run `yarn` or `yarn preconstruct dev` if preconstruct dev isn't in your postinstall hook\n\n// curious why you need to?\n// this file exists so that you can import from the entrypoint normally\n// except that it points to your source file and you don't need to run build constantly\n// which means we need to re-export all of the modules from your source file\n// and since export * doesn't include default exports, we need to read your source file\n// to check for a default export and re-export it if it exists\n// it's not ideal, but it works pretty well ¯\\_(ツ)_/¯\n" + tsTemplate(hasDefaultExport, path.relative(path.dirname(cjsDistPath), entrypoint.source).replace(/\.tsx?$/, "")));
+}
+
+async function writeTypeSystemFile(typeSystemPromise, entrypoint) {
+  let [typeSystem, content] = await typeSystemPromise;
+  if (null === typeSystem) return;
+  let cjsDistPath = path.join(entrypoint.directory, entrypoint.main);
+  "flow" === typeSystem && await fs.writeFile(cjsDistPath + ".flow", flowTemplate(!1, path.relative(path.dirname(cjsDistPath), entrypoint.source))), 
+  "typescript" === typeSystem && await writeDevTSFile(entrypoint, content);
+}
+
+async function dev(projectDir) {
+  let project = await Project.create(projectDir);
+  project.packages.forEach(({entrypoints: entrypoints}) => entrypoints.forEach(x => x.strict())), 
+  info("project is valid!");
+  await Promise.all(project.packages.map(pkg => Promise.all(pkg.entrypoints.map(async _entrypoint => {
+    let entrypoint = _entrypoint.strict(), typeSystemPromise = getTypeSystem(entrypoint), distDirectory = path.join(entrypoint.directory, "dist");
+    await fs.remove(distDirectory), await fs.ensureDir(distDirectory);
+    let promises = [ writeTypeSystemFile(typeSystemPromise, entrypoint), fs.writeFile(path.join(entrypoint.directory, entrypoint.main), `"use strict";\n// this file might look strange and you might be wondering what it's for\n// it's lets you import your source files by importing this entrypoint\n// as you would import it if it was built with preconstruct build\n// this file is slightly different to some others though\n// it has a require hook which compiles your code with Babel\n// this means that you don't have to set up @babel/register or anything like that\n// but you can still require this module and it'll be compiled\n\nconst path = require("path");\n\n// this bit of code imports the require hook and registers it\nlet unregister = require(${JSON.stringify(path.relative(distDirectory, require.resolve("@preconstruct/hook")))}).___internalHook(path.resolve(__dirname, ${JSON.stringify(path.relative(distDirectory, project.directory))}));\n\n// this re-exports the source file\nmodule.exports = require(${JSON.stringify(path.relative(distDirectory, entrypoint.source))});\n\n// this unregisters the require hook so that any modules required after this one\n// aren't compiled with the require hook in case you have some other require hook\n// or something that should be used on other modules\nunregister();\n`) ];
+    entrypoint.module && promises.push(fs.writeFile(path.join(entrypoint.directory, entrypoint.module), cjsOnlyReexportTemplate(path.relative(distDirectory, entrypoint.source))));
+    let browserField = entrypoint.browser;
+    if (browserField) for (let key of Object.keys(browserField)) promises.push(fs.writeFile(path.join(entrypoint.directory, browserField[key]), cjsOnlyReexportTemplate(path.relative(distDirectory, entrypoint.source))));
+    return Promise.all(promises);
+  })))), await Promise.all([]), success("created links!");
+}
+
+let SOURCEMAPPING_URL = "sourceMa";
+
+function writeOutputFile(outputFile, outputOptions) {
+  const fileName = path.resolve(outputOptions.dir || path.dirname(outputOptions.file), outputFile.fileName);
+  let writeSourceMapPromise, source;
+  if ("asset" === outputFile.type) source = outputFile.source; else if (source = outputFile.code, 
+  outputOptions.sourcemap && outputFile.map) {
+    let url;
+    "inline" === outputOptions.sourcemap ? url = outputFile.map.toUrl() : (url = `${path.basename(outputFile.fileName)}.map`, 
+    writeSourceMapPromise = fs.outputFile(`${fileName}.map`, outputFile.map.toString())), 
+    "hidden" !== outputOptions.sourcemap && (source += `//# ${SOURCEMAPPING_URL}=${url}\n`);
+  }
+  return Promise.all([ fs.outputFile(fileName, source), writeSourceMapPromise ]);
+}
+
+async function buildPackage(pkg, aliases) {
+  let configs = getRollupConfigs(pkg, aliases), outputs = await Promise.all(configs.map(async ({config: config, outputs: outputs}) => {
+    let bundle = await rollup.rollup(config);
+    return Promise.all(outputs.map(async outputConfig => ({
+      output: (await bundle.generate(outputConfig)).output,
+      outputConfig: outputConfig
+    })));
+  }));
+  await Promise.all(outputs.map(x => Promise.all(x.map(bundle => Promise.all(bundle.output.map(output => writeOutputFile(output, bundle.outputConfig)))))));
+}
+
+async function retryableBuild(pkg, aliases) {
+  try {
+    await buildPackage(pkg, aliases);
+  } catch (err) {
+    if (err instanceof Promise) return await err, void await retryableBuild(pkg, aliases);
+    if (err instanceof FatalError || err instanceof BatchError || err instanceof ScopelessError) throw err;
+    if ("BABEL_PARSE_ERROR" === err.pluginCode) throw new ScopelessError(err.message);
+    throw new UnexpectedBuildError(err, pkg.name);
+  }
+}
+
+async function build(directory) {
+  try {
+    createWorker(), await hasherPromise;
+    let project = await Project.create(directory);
+    info("building bundles!");
+    let aliases = getAliases(project), errors = [];
+    if (await Promise.all(project.packages.map(async pkg => {
+      await Promise.all([ fs.remove(path.join(pkg.directory, "dist")), ...pkg.entrypoints.map(entrypoint => fs.remove(path.join(entrypoint.directory, "dist"))) ]), 
+      await Promise.all(pkg.entrypoints.map(async entrypoint => {
+        isTsPath(entrypoint.source) && (await fs.mkdir(path.join(entrypoint.directory, "dist")), 
+        await writeDevTSFile(entrypoint.strict(), await fs.readFile(entrypoint.source, "utf8")));
+      }));
+    })), await Promise.all(project.packages.map(async pkg => {
+      try {
+        await retryableBuild(pkg, aliases);
+      } catch (err) {
+        err instanceof BatchError ? errors.push(...err.errors) : errors.push(err);
+      }
+    })), errors.length) throw new BatchError(errors.sort((a, b) => (a.scope + a.message).localeCompare(b.scope + b.message)));
+    success("built bundles!");
+  } finally {
+    destroyWorker();
+  }
+}
+
+function ownKeys$3(object, enumerableOnly) {
+  var keys = Object.keys(object);
+  if (Object.getOwnPropertySymbols) {
+    var symbols = Object.getOwnPropertySymbols(object);
+    enumerableOnly && (symbols = symbols.filter((function(sym) {
+      return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+    }))), keys.push.apply(keys, symbols);
+  }
+  return keys;
+}
+
+function _objectSpread$3(target) {
+  for (var i = 1; i < arguments.length; i++) {
+    var source = null != arguments[i] ? arguments[i] : {};
+    i % 2 ? ownKeys$3(Object(source), !0).forEach((function(key) {
+      _defineProperty$8(target, key, source[key]);
+    })) : Object.getOwnPropertyDescriptors ? Object.defineProperties(target, Object.getOwnPropertyDescriptors(source)) : ownKeys$3(Object(source)).forEach((function(key) {
+      Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+    }));
+  }
+  return target;
+}
+
+function _defineProperty$8(obj, key, value) {
+  return key in obj ? Object.defineProperty(obj, key, {
+    value: value,
+    enumerable: !0,
+    configurable: !0,
+    writable: !0
+  }) : obj[key] = value, obj;
+}
+
+function relativePath(id) {
+  return path.relative(process.cwd(), id);
+}
+
+async function watchPackage(pkg, aliases) {
+  const _configs = getRollupConfigs(pkg, aliases);
+  await fs.remove(path.join(pkg.directory, "dist"));
+  let configs = _configs.map(config => _objectSpread$3({}, config.config, {
+    output: config.outputs
+  }));
+  const watcher = rollup.watch(configs);
+  let reject, startResolve, errPromise = new Promise((resolve, _reject) => {
+    reject = _reject;
+  }), startPromise = new Promise(resolve => {
+    startResolve = resolve;
+  });
+  return watcher.on("event", event => {
+    switch (event.code) {
+     case "ERROR":
+      reject(event.error);
+      break;
+
+     case "START":
+      startResolve();
+      break;
+
+     case "BUNDLE_START":
+      info(chalk.cyan(`bundles ${chalk.bold("string" == typeof event.input ? relativePath(event.input) : Array.isArray(event.input) ? event.input.map(relativePath).join(", ") : Object.values(event.input).map(relativePath).join(", "))} → ${chalk.bold(event.output.map(relativePath).join(", "))}...`), pkg.name);
+      break;
+
+     case "BUNDLE_END":
+      info(chalk.green(`created ${chalk.bold(event.output.map(relativePath).join(", "))} in ${chalk.bold(ms(event.duration))}`), pkg.name);
+      break;
+
+     case "END":
+      info("waiting for changes...", pkg.name);
+    }
+  }), {
+    error: errPromise,
+    start: startPromise
+  };
+}
+
+async function retryableWatch(pkg, aliases, getPromises, depth) {
+  try {
+    let {error: error, start: start} = await watchPackage(pkg, aliases);
+    0 === depth && getPromises({
+      start: start
+    }), await error;
+  } catch (err) {
+    if (err instanceof Promise) return await err, void await retryableWatch(pkg, aliases, getPromises, depth + 1);
+    throw err;
+  }
+}
+
+async function build$1(directory) {
+  createWorker();
+  let project = await Project.create(directory), aliases = getAliases(project), startCount = 0;
+  await Promise.all(project.packages.map(pkg => retryableWatch(pkg, aliases, async ({start: start}) => {
+    await start, ++startCount === project.packages.length && success(successes.startedWatching);
+  }, 0)));
+}
+
+async function fixEntrypoint(entrypoint) {
+  let hasBeenModified = !1;
+  if (entrypoint.directory !== entrypoint.package.directory) try {
+    entrypoint.source;
+  } catch (err) {
+    if ("MODULE_NOT_FOUND" !== err.code) throw err;
+    {
+      let val = await promptInput(inputs.getSource, entrypoint, "src/index");
+      "src/index" !== val && "src/index.js" !== val && "src/index.jsx" !== val && "src/index.ts" !== val && "src/index.tsx" !== val ? (entrypoint._config.source = val, 
+      hasBeenModified = !0) : info(`${val} is the default value for source files so it will not be written`);
+    }
+  }
+  if (validateEntrypointSource(entrypoint), null !== entrypoint.umdMain && !isUmdNameSpecified(entrypoint)) {
+    let umdName = await promptInput(inputs.getUmdName, entrypoint);
+    entrypoint.umdName = umdName, hasBeenModified = !0;
+  }
+  return hasBeenModified && await entrypoint.save(), hasBeenModified;
+}
+
+async function fix(directory) {
+  let {packages: packages} = await Project.create(directory);
+  success((await Promise.all(packages.map(async pkg => {
+    let didModifyInPkgFix = await fixPackage(pkg), didModifyInEntrypointsFix = (await Promise.all(pkg.entrypoints.map(fixEntrypoint))).some(x => x);
+    return didModifyInPkgFix || didModifyInEntrypointsFix;
+  }))).some(x => x) ? "fixed project!" : "project already valid!");
+}
+
+SOURCEMAPPING_URL += "ppingURL", process.env.NODE_ENV = "production";
+
+let {input: input} = meow("\nUsage\n  $ preconstruct [command]\nCommands\n  init         initialise a project\n  build        build the project\n  watch        start a watch process to build the project\n  validate     validate the project\n  fix          infer as much information as possible and fix the project\n  dev          create links so entrypoints can be imported\n\n", {}), errors$1 = {
+  commandNotFound: "Command not found"
+};
+
+class CommandNotFoundError extends Error {}
+
+(async () => {
+  if (1 !== input.length) throw new CommandNotFoundError;
+  switch (input[0]) {
+   case "init":
+    return void await init(process.cwd());
+
+   case "validate":
+    return void await validate(process.cwd());
+
+   case "build":
+    return void await build(process.cwd());
+
+   case "watch":
+    return void await build$1(process.cwd());
+
+   case "fix":
+    return void await fix(process.cwd());
+
+   case "dev":
+    return void await dev(process.cwd());
+
+   default:
+    throw new CommandNotFoundError;
+  }
+})().catch(err => {
+  if (err instanceof FixableError) error(err.message, err.scope), info("The above error can be fixed automatically by running preconstruct fix"); else if (err instanceof FatalError) error(err.message, err.scope); else if (err instanceof BatchError) for (let fatalError of err.errors) error(fatalError.message, fatalError.scope); else err instanceof CommandNotFoundError ? error(errors$1.commandNotFound) : err instanceof UnexpectedBuildError ? error(err.message, err.scope) : err instanceof ScopelessError ? log(err.message) : error(err);
+  info("If want to learn more about the above error, check https://preconstruct.tools/errors"), 
+  info("If the error is not there and you want to learn more about it, open an issue at https://github.com/preconstruct/preconstruct/issues/new"), 
+  process.exit(1);
+});

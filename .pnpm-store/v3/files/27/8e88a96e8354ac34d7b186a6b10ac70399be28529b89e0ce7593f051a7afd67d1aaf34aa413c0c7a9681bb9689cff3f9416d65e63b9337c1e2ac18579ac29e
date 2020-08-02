@@ -1,0 +1,74 @@
+{
+  "name": "xxhash-wasm",
+  "version": "0.3.1",
+  "description": "A WebAssembly implementation of xxHash",
+  "main": "cjs/xxhash-wasm.js",
+  "module": "esm/xxhash-wasm.js",
+  "author": "Michael Jungo <michaeljungo92@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jungomi/xxhash-wasm.git"
+  },
+  "files": [
+    "cjs",
+    "esm",
+    "umd"
+  ],
+  "keywords": [
+    "xxhash",
+    "hash",
+    "wasm",
+    "webassembly"
+  ],
+  "scripts": {
+    "build": "yarn run build-wasm && yarn run build-js",
+    "build-js": "yarn run build-browser && yarn run build-node",
+    "build-browser": "rollup -c",
+    "build-node": "TARGET=node rollup -c",
+    "build-wasm": "docker run -it --rm -u $(id -u):$(id -g) -v $PWD:/src -w /src jungomi/binaryen wasm-opt -O3 src/xxhash.wat -o src/xxhash.wasm",
+    "clean": "rimraf coverage cjs esm umd",
+    "fix": "eslint . --fix",
+    "lint": "eslint .",
+    "size": "bundlesize",
+    "test": "jest",
+    "test-update": "jest --updateSnapshot",
+    "test-coverage": "jest --coverage",
+    "prebuild": "yarn run clean",
+    "prepublish": "yarn run build"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "babel-core": "^6.26.0",
+    "babel-eslint": "^8.0.1",
+    "babel-preset-env": "^1.6.1",
+    "bundlesize": "^0.15.3",
+    "eslint": "^4.9.0",
+    "eslint-config-prettier": "^2.6.0",
+    "eslint-plugin-prettier": "^2.3.1",
+    "jest": "^21.2.1",
+    "jest-t-assert": "^0.2.0",
+    "prettier": "^1.7.4",
+    "rimraf": "^2.6.2",
+    "rollup": "^0.50.0",
+    "rollup-plugin-babel": "^3.0.2",
+    "rollup-plugin-node-resolve": "^3.0.0",
+    "rollup-plugin-replace": "^2.0.0",
+    "rollup-plugin-uglify": "^2.0.1",
+    "uglify-es": "^3.1.5"
+  },
+  "bundlesize": [
+    {
+      "path": "./cjs/xxhash-wasm.js",
+      "maxSize": "1.5kb"
+    },
+    {
+      "path": "./esm/xxhash-wasm.js",
+      "maxSize": "1.5kb"
+    },
+    {
+      "path": "./umd/xxhash-wasm.js",
+      "maxSize": "1.5kb"
+    }
+  ]
+}
