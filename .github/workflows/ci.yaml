@@ -26,7 +26,7 @@ jobs:
   version:
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    # if: github.ref == 'refs/heads/next' && github.repository == 'remirror/remirror'
+    if: github.ref == 'refs/heads/next' && github.repository == 'juanpicado/changeset_test'
     steps:
       - name: checkout code repository
         uses: actions/checkout@v2
