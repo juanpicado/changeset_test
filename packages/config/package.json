@@ -1,5 +1,5 @@
 {
-  "name": "config",
+  "name": "@scope/config",
   "version": "1.0.1",
   "description": "",
   "main": "dist/config.cjs.js",

@@ -1,3 +1,5 @@
+import {sumStuff } from '@scope/utils';
+
 export function typescript() {
-	return 2;
+	return sumStuff(2, 1);
 }
