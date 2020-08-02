@@ -1,2 +1,4 @@
 node_modules
 **/dist/**
+# CI Pnpm cache
+.pnpm-store/
