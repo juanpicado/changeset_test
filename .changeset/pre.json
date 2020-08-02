@@ -2,7 +2,12 @@
   "mode": "pre",
   "tag": "next",
   "initialVersions": {
-    "changeset_test": "2.0.0"
+    "changeset_test": "2.0.0",
+    "config": "1.0.0",
+    "@custom/typescript": "1.0.0",
+    "utils": "1.0.0"
   },
-  "changesets": []
+  "changesets": [
+    "twenty-maps-act"
+  ]
 }

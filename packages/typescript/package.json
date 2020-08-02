@@ -1,6 +1,6 @@
 {
   "name": "@custom/typescript",
-  "version": "1.0.0",
+  "version": "2.0.0-next.0",
   "description": "",
   "main": "dist/typescript.cjs.js",
   "module": "dist/typescript.esm.js",

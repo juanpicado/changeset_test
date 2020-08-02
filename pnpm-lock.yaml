@@ -17,6 +17,11 @@ importers:
       '@preconstruct/cli': 1.1.17
       typescript: ^3.9.7
   packages/config:
+    dependencies:
+      '@custom/typescript': 'link:../typescript'
+    specifiers:
+      '@custom/typescript': 2.0.0-next.0
+  packages/typescript:
     specifiers: {}
   packages/utils:
     specifiers: {}

@@ -1,0 +1,114 @@
+name: Node CI
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+
+  push:
+    branches:
+      - main
+      - next
+      - 'changeset-release/main'
+      - 'changeset-release/next'
+
+  pull_request:
+    branches:
+      - main
+      - next
+
+env:
+  CI: true
+  PNPM_VERSION: 5.3.0
+  PNPM_CACHE_FOLDER: .pnpm-store
+
+jobs:
+  # Update package versions from changesets.
+  version:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    # if: github.ref == 'refs/heads/next' && github.repository == 'remirror/remirror'
+    steps:
+      - name: checkout code repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: setup caching
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.PNPM_CACHE_FOLDER }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: setup node.js
+        uses: actions/setup-node@v2-beta
+        with:
+          node-version: 14
+
+      - name: install pnpm
+        run: npm install pnpm@5.4.6 -g
+
+      - name: setup pnpm config
+        run: pnpm config set store-dir $PNPM_CACHE_FOLDER
+
+      - name: audit dependencies
+        run: pnpm audit --audit-level high
+
+      - name: install dependencies
+        run: pnpm install
+
+      - name: build project
+        run: pnpm build
+
+      - name: create versions
+        uses: changesets/action@master
+        with:
+          version: pnpm ci:version
+          commit: 'chore: update versions'
+          title: 'chore: update versions'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build the project and run tests on built files.
+  build_test:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [14.x]
+      fail-fast: false
+
+    steps:
+      - name: checkout code repository
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: setup caching
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.PNPM_CACHE_FOLDER }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: setup node.js
+        uses: actions/setup-node@v2-beta
+        with:
+          node-version: ${{ matrix.node-version }}
+
+      - name: install pnpm
+        run: npm install pnpm@5.4.6 -g
+
+      - name: setup pnpm config
+        run: pnpm config set store-dir $PNPM_CACHE_FOLDER
+
+      - name: audit dependencies
+        run: pnpm audit --audit-level high
+
+      - name: install dependencies
+        run: pnpm install
+
+      - name: build project
+        run: pnpm build
