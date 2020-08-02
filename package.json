@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "changeset": "changeset",
+    "version:changeset": "changeset version",
     "build": "preconstruct build",
     "build:dev": "preconstruct dev",
     "postinstall": "preconstruct dev",
