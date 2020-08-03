@@ -1,6 +1,6 @@
 {
   "name": "@custom/typescript",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "typescript example",
   "main": "dist/typescript.cjs.js",
   "module": "dist/typescript.esm.js",
@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@scope/utils": "workspace:*"
+    "@scope/utils": "2.0.1"
   },
   "preconstruct": {
     "source": "src/index.ts"
