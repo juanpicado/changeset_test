@@ -1,5 +1,5 @@
 {
-  "name": "@custom/typescript",
+  "name": "@non-babel/typescript",
   "version": "3.0.0",
   "description": "typescript example",
   "main": "dist/typescript.cjs.js",
