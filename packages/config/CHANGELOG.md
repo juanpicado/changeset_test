@@ -1,5 +1,18 @@
 # config
 
+## 3.0.0
+
+### Major Changes
+
+- d317a72: dsadas
+- 50b0708: dsadsadsa
+
+### Patch Changes
+
+- Updated dependencies [d317a72]
+- Updated dependencies [50b0708]
+  - @non-babel/typescript@4.0.0
+
 ## 2.0.0
 
 ### Major Changes
