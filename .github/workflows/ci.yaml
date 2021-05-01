@@ -52,6 +52,3 @@ jobs:
 
       - name: install pnpm
         run: sudo npm install pnpm@latest
-
-      - name: install dependencies
-        run: pnpm install
