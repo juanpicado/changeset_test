@@ -4,11 +4,9 @@
   "scripts": {
     "changeset": "changeset",
     "changeset:check": "changeset status --since-master",
-    "ci:version": "run-s ci:version:changeset ci:version:repo ci:version:install",
+    "ci:version": "run-s ci:version:changeset ci:version:install",
     "ci:version:changeset": "changeset version",
-    "ci:version:repo": "run-s fix:repo update:workspace",
     "ci:version:install": "pnpm install --frozen-lockfile=false",
-    "fix:repo": "manypkg fix",
     "update:workspace": "pnpm up -r --workspace \"@scope/*\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
