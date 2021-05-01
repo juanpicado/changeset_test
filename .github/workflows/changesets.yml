@@ -25,12 +25,12 @@ jobs:
           fetch-depth: 0
 
       - name: setup node.js
-        uses: actions/setup-node@v2
+        uses: actions/setup-node@master
         with:
           node-version: 14
-          registry-url: 'https://registry.npmjs.org'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
       - name: Creating .npmrc
         run: |
           cat << EOF > "$HOME/.npmrc"
@@ -55,7 +55,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
 
       - name: create versions
-        uses: verdaccio/changeset-action@master
+        uses: changesets/action@master
         with:
           version: pnpm ci:version
           commit: 'chore: update versions'
