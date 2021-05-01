@@ -31,7 +31,14 @@ jobs:
           # registry-url: 'https://registry.verdaccio.org'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
-
+      - name: Creating .npmrc
+        run: |
+          cat << EOF > "$HOME/.npmrc"
+            email=my@email.com
+            //registry.npmjs.org/:_authToken=$NPMJS_TOKEN
+          EOF
+        env:
+          NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
       - name: install pnpm
         run: npm i pnpm@latest -g
         env:
