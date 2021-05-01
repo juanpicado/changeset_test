@@ -6,6 +6,7 @@
     "changeset:check": "changeset status --since-master",
     "ci:version": "run-s ci:version:changeset ci:version:install",
     "ci:version:changeset": "changeset version",
+    "ci:publish": "changeset publish",
     "ci:version:install": "pnpm install --frozen-lockfile=false",
     "update:workspace": "pnpm up -r --workspace \"@scope/*\"",
     "test": "echo \"Error: no test specified\" && exit 1"
