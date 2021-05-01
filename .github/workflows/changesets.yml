@@ -1,10 +1,17 @@
 name: Changesets
+
 on:
+  schedule:
+    - cron: '0 0 * * *'
+
   push:
     branches:
       - master
+
+
 jobs:
-  release:
+  version:
+    timeout-minutes: 14
     runs-on: ubuntu-latest
     steps:
       - name: checkout code repository
@@ -12,18 +19,30 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Node.js 12.x
+      - name: setup node.js
         uses: actions/setup-node@master
         with:
-          node-version: 12.x
+          node-version: 12
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+      - name: Creating .npmrc
+        run: |
+          cat << EOF > "$HOME/.npmrc"
+            //registry.npmjs.org/:_authToken=$NPMJS_TOKEN
+          EOF
+        env:
+          NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
       - name: install pnpm
         run: npm i pnpm@latest -g
       - name: setup pnpm config
         run: pnpm config set store-dir $PNPM_CACHE_FOLDER
       - name: install dependencies
         run: pnpm install
+        # env:
+        #   NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
       - name: npm whoami
-        run: npm whoami        
+        run: npm whoami   
       - name: create versions
         uses: changesets/action@master
         with:
