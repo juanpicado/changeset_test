@@ -22,6 +22,8 @@ jobs:
         run: pnpm config set store-dir $PNPM_CACHE_FOLDER
       - name: install dependencies
         run: pnpm install
+      - name: npm whoami
+        run: npm whoami        
       - name: create versions
         uses: changesets/action@master
         with:
