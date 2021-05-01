@@ -1,5 +1,16 @@
 # config
 
+## 2.1.0
+
+### Minor Changes
+
+- 070973c: dasdas
+
+### Patch Changes
+
+- Updated dependencies [070973c]
+  - @non-babel/typescript@4.1.0
+
 ## 3.0.0
 
 ### Major Changes
