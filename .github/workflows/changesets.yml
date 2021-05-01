@@ -25,17 +25,12 @@ jobs:
           node-version: 12
         env:
           NPM_TOKEN_: ${{ secrets.NPMJS_TOKEN }}
-      - name: Creating .npmrc
-        run: |
-          cat << EOF > "$HOME/.npmrc"
-            //registry.npmjs.org/:_authToken=$NPMJS_TOKEN
-          EOF
-        env:
-          NPM_TOKEN: test
       - name: install pnpm
         run: npm i pnpm@latest -g
       - name: install dependencies
         run: pnpm install
+      - name: Setup npmrc
+        run: echo "//registry.npmjs.org/:_authToken=test" > .npmrc        
       - name: cat npmrc
         run: cat .npmrc         
       - name: npm whoami
