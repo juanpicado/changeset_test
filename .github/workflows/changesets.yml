@@ -47,9 +47,6 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.VERDACCIO_TOKEN }}
 
-      - name: build
-        run: pnpm build
-
       - name: create versions
         uses: verdaccio/changeset-action@master
         with:
