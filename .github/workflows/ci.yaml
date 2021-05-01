@@ -55,6 +55,3 @@ jobs:
 
       - name: install dependencies
         run: pnpm install
-
-      - name: build project
-        run: pnpm build

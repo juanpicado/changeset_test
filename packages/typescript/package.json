@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@scope/utils": "2.0.1"
+    "lodash": "4.17.21"
   },
   "preconstruct": {
     "source": "src/index.ts"

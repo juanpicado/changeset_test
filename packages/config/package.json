@@ -14,6 +14,6 @@
     "source": "src/index.js"
   },
   "dependencies": {
-    "@custom/typescript": "3.0.0"
+    "@non-babel/typescript": "workspace:3.0.0"
   }
 }
