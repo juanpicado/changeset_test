@@ -1,52 +1,27 @@
 name: Changesets
-
 on:
-  schedule:
-    - cron: '0 0 * * *'
-
   push:
     branches:
       - master
-
-env:
-  CI: true
-  PNPM_CACHE_FOLDER: .pnpm-store
-
 jobs:
-  # Update package versions from changesets.
-  version:
-    timeout-minutes: 14
+  release:
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master' && github.repository == 'juanpicado/changeset_test'
     steps:
       - name: checkout code repository
         uses: actions/checkout@master
         with:
           fetch-depth: 0
 
-      - name: setup node.js
+      - name: Setup Node.js 12.x
         uses: actions/setup-node@master
         with:
-          node-version: 12
-        # env:
-        #   NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
-        #   NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
-      # - name: Creating .npmrc
-      #   run: |
-      #     cat << EOF > "$HOME/.npmrc"
-      #       //registry.npmjs.org/:_authToken=$NPMJS_TOKEN
-      #     EOF
-      #   env:
-      #     NPM_TOKEN: ${{ secrets.NPMJS_TOKEN }}
+          node-version: 12.x
       - name: install pnpm
         run: npm i pnpm@latest -g
       - name: setup pnpm config
         run: pnpm config set store-dir $PNPM_CACHE_FOLDER
       - name: install dependencies
         run: pnpm install
-        # env:
-        #   NODE_AUTH_TOKEN: ${{ secrets.NPMJS_TOKEN }}
-
       - name: create versions
         uses: changesets/action@master
         with:
