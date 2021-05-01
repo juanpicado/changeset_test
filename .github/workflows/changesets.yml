@@ -30,9 +30,9 @@ jobs:
       - name: install dependencies
         run: pnpm install
       - name: Setup npmrc
-        run: echo "//registry.npmjs.org/:_authToken=test" > .npmrc        
-      - name: cat npmrc
-        run: cat .npmrc         
+        run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPMJS_TOKEN }}" > .npmrc        
+      # - name: cat npmrc
+      #   run: cat .npmrc         
       - name: npm whoami
         run: npm whoami   
       - name: create versions
