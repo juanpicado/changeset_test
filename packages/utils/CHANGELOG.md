@@ -1,5 +1,12 @@
 # utils
 
+## 3.0.0
+
+### Major Changes
+
+- d317a72: dsadas
+- 50b0708: dsadsadsa
+
 ## 2.0.1
 
 ### Patch Changes

@@ -1,5 +1,12 @@
 # @custom/typescript
 
+## 4.0.0
+
+### Major Changes
+
+- d317a72: dsadas
+- 50b0708: dsadsadsa
+
 ## 3.0.0
 
 ### Major Changes

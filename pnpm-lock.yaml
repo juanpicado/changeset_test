@@ -22,7 +22,7 @@ importers:
 
   packages/config:
     specifiers:
-      '@non-babel/typescript': workspace:3.0.0
+      '@non-babel/typescript': workspace:4.0.0
     dependencies:
       '@non-babel/typescript': link:../typescript
 

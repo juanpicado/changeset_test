@@ -1,6 +1,6 @@
 {
   "name": "@non-babel/config",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "",
   "main": "dist/config.cjs.js",
   "module": "dist/config.esm.js",
@@ -14,6 +14,6 @@
     "source": "src/index.js"
   },
   "dependencies": {
-    "@non-babel/typescript": "workspace:3.0.0"
+    "@non-babel/typescript": "workspace:4.0.0"
   }
 }
