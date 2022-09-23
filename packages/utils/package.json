@@ -1,6 +1,6 @@
 {
   "name": "@non-babel/utils",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "",
   "main": "dist/utils.cjs.js",
   "module": "dist/utils.esm.js",

@@ -1,5 +1,17 @@
 # config
 
+## 3.0.0
+
+### Major Changes
+
+- 56eebfe: test
+
+### Patch Changes
+
+- Updated dependencies [56eebfe]
+- Updated dependencies [8856a7d]
+  - @non-babel/typescript@5.0.0
+
 ## 2.1.0
 
 ### Minor Changes
