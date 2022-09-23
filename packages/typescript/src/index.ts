@@ -1,13 +1,17 @@
-import {sumStuff } from '@scope/utils';
+import { sumStuff } from "@scope/utils";
 
 export function typescript() {
-	return sumStuff(2, 1);
+  return sumStuff(2, 1);
 }
 
 export function doSomething() {
-	return sumStuff(2, 4);
+  return sumStuff(2, 4);
 }
 
 export function doSomethingElse() {
-	return sumStuff(2, 4);
+  return sumStuff(2, 4);
+}
+
+export function doSomethingElse2() {
+  return sumStuff(2, 4);
 }
