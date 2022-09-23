@@ -22,7 +22,7 @@ jobs:
       - name: setup node.js
         uses: actions/setup-node@master
         with:
-          node-version: 12
+          node-version: 16
         env:
           NPM_TOKEN_: ${{ secrets.NPMJS_TOKEN }}
       - name: install pnpm
