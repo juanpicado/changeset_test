@@ -1,6 +1,6 @@
 {
   "name": "@non-babel/typescript",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "description": "typescript example",
   "main": "dist/typescript.cjs.js",
   "module": "dist/typescript.esm.js",
